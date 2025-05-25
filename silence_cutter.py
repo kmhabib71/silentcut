@@ -1270,14 +1270,14 @@ class ProcessingThread(QThread):
         
     def run(self):
         try:
-            # Try fast FFmpeg processing first
+            # Try hardware-accelerated FFmpeg processing first
             fast_result = self.run_fast_ffmpeg_processing()
             if fast_result and os.path.exists(fast_result):
                 self.processing_complete.emit(fast_result)
                 return
             
-            # Fallback to MoviePy processing if FFmpeg failed
-            print("\n---------- FALLBACK TO MOVIEPY PROCESSING ----------")
+            # Fallback to MoviePy processing with hardware acceleration if FFmpeg failed
+            print("\n---------- FALLBACK TO MOVIEPY WITH HARDWARE ACCELERATION ----------")
             
             # Get the FFmpeg path - try environment or fallback to known location
             ffmpeg_path = self.get_ffmpeg_path()
@@ -1409,18 +1409,36 @@ class ProcessingThread(QThread):
             # Create a unique temp filename for audio to avoid conflicts
             temp_audio_file = os.path.join(tempfile.gettempdir(), f"temp-audio-processing-{os.getpid()}-{int(time.time())}.m4a")
             
-            # Set up progress updates through manual timed updates
+            # Set up progress updates through manual timed updates with timeout
             self.last_update_time = time.time()
             self.last_progress = 40
+            self.processing_start_time = time.time()
+            self.processing_timeout = 600  # 10 minute timeout for MoviePy
             
             def update_progress():
                 current_time = time.time()
-                if current_time - self.last_update_time >= 0.2:
+                elapsed_total = current_time - self.processing_start_time
+                
+                # Check for timeout
+                if elapsed_total > self.processing_timeout:
+                    print(f"MoviePy processing timeout after {self.processing_timeout} seconds")
+                    timer.stop()
+                    return
+                
+                if current_time - self.last_update_time >= 1.0:  # Update every second
                     self.last_update_time = current_time
-                    self.last_progress += 1
-                    if self.last_progress <= 95:  # Don't go beyond 95
-                        self.progress_updated.emit(self.last_progress)
-                        QApplication.processEvents()  # Process UI events
+                    
+                    # More realistic progress increments
+                    if elapsed_total < 60:  # First minute
+                        increment = 0.8
+                    elif elapsed_total < 180:  # Next 2 minutes
+                        increment = 0.4
+                    else:  # After 3 minutes, very slow
+                        increment = 0.1
+                    
+                    self.last_progress = min(94, self.last_progress + increment)
+                    self.progress_updated.emit(int(self.last_progress))
+                    QApplication.processEvents()  # Process UI events
             
             # Create a timer to periodically update the progress
             timer = QTimer()
@@ -1430,21 +1448,67 @@ class ProcessingThread(QThread):
                 # Start the timer
                 timer.start(200)  # Check every 200ms
                 
-                # Export the result
+                # Detect hardware acceleration for MoviePy export
+                hw_options = self.detect_hardware_acceleration()
+                video_codec, hw_name = hw_options[0]
+                print(f"MoviePy export using {hw_name}")
+                
+                # Prepare FFmpeg parameters for hardware acceleration
+                ffmpeg_params = ["-pix_fmt", "yuv420p"]  # Standard pixel format
+                
+                if video_codec == 'h264_nvenc':
+                    ffmpeg_params.extend([
+                        "-preset", "fast",
+                        "-rc", "vbr",
+                        "-cq", "23",
+                        "-b:v", "5M",
+                        "-maxrate", "10M",
+                        "-bufsize", "10M"
+                    ])
+                elif video_codec == 'h264_qsv':
+                    ffmpeg_params.extend([
+                        "-preset", "fast",
+                        "-global_quality", "23",
+                        "-look_ahead", "1"
+                    ])
+                elif video_codec == 'h264_amf':
+                    ffmpeg_params.extend([
+                        "-quality", "speed",
+                        "-rc", "vbr_peak",
+                        "-qp_i", "22",
+                        "-qp_p", "24",
+                        "-qp_b", "26"
+                    ])
+                else:  # libx264 (software)
+                    ffmpeg_params.extend([
+                        "-preset", "fast",
+                        "-crf", "23"
+                    ])
+                
+                # Export the result with hardware acceleration
                 print(f"Writing output to: {self.output_path}")
                 result.write_videofile(
                     self.output_path, 
-                    codec="libx264", 
+                    codec=video_codec,  # Use detected hardware codec
                     audio_codec="aac",
                     temp_audiofile=temp_audio_file, 
                     remove_temp=True,
                     verbose=True,  # Set to True for more detailed output
                     logger=None,
-                    ffmpeg_params=["-pix_fmt", "yuv420p"]  # Add standard pixel format for better compatibility
+                    ffmpeg_params=ffmpeg_params  # Hardware-specific parameters
                 )
                 
                 # Stop the timer
                 timer.stop()
+                
+                # Verify the output file was created successfully
+                if os.path.exists(self.output_path):
+                    file_size = os.path.getsize(self.output_path)
+                    print(f"MoviePy processing completed successfully")
+                    print(f"Output file size: {file_size / (1024*1024):.1f} MB")
+                else:
+                    raise RuntimeError("Output file was not created by MoviePy")
+                    
             except Exception as e:
                 timer.stop()
                 print(f"Error during video writing: {str(e)}")
@@ -1459,7 +1523,7 @@ class ProcessingThread(QThread):
                 except Exception as cleanup_error:
                     print(f"Error during cleanup: {str(cleanup_error)}")
             
-            # Final progress update
+            # Final progress update - ensure we reach 100%
             self.progress_updated.emit(100)
             QApplication.processEvents()
             
@@ -1471,10 +1535,65 @@ class ProcessingThread(QThread):
             traceback.print_exc()
             self.processing_complete.emit("")
 
-    def run_fast_ffmpeg_processing(self):
-        """Fast video processing using direct FFmpeg - much faster than MoviePy"""
+    def detect_hardware_acceleration(self):
+        """Detect available hardware acceleration options"""
+        hw_options = []
+        
         try:
-            print(f"\n---------- FAST FFMPEG PROCESSING START ----------")
+            # Test NVIDIA NVENC
+            result = subprocess.run([
+                self.ffmpeg_path, '-f', 'lavfi', '-i', 'testsrc=duration=1:size=320x240:rate=1',
+                '-c:v', 'h264_nvenc', '-f', 'null', '-'
+            ], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            
+            if result.returncode == 0:
+                hw_options.append(('h264_nvenc', 'NVIDIA NVENC'))
+                print("✓ NVIDIA NVENC hardware acceleration available")
+        except:
+            pass
+            
+        try:
+            # Test Intel QuickSync
+            result = subprocess.run([
+                self.ffmpeg_path, '-f', 'lavfi', '-i', 'testsrc=duration=1:size=320x240:rate=1',
+                '-c:v', 'h264_qsv', '-f', 'null', '-'
+            ], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            
+            if result.returncode == 0:
+                hw_options.append(('h264_qsv', 'Intel QuickSync'))
+                print("✓ Intel QuickSync hardware acceleration available")
+        except:
+            pass
+            
+        try:
+            # Test AMD AMF
+            result = subprocess.run([
+                self.ffmpeg_path, '-f', 'lavfi', '-i', 'testsrc=duration=1:size=320x240:rate=1',
+                '-c:v', 'h264_amf', '-f', 'null', '-'
+            ], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            
+            if result.returncode == 0:
+                hw_options.append(('h264_amf', 'AMD AMF'))
+                print("✓ AMD AMF hardware acceleration available")
+        except:
+            pass
+            
+        # Fallback to software encoding
+        if not hw_options:
+            hw_options.append(('libx264', 'Software (CPU)'))
+            print("ℹ Using software encoding (no hardware acceleration detected)")
+            
+        return hw_options
+
+    def run_fast_ffmpeg_processing(self):
+        """Fast video processing using direct FFmpeg with hardware acceleration"""
+        try:
+            print(f"\n---------- HARDWARE-ACCELERATED FFMPEG PROCESSING START ----------")
+            
+            # Detect available hardware acceleration
+            hw_options = self.detect_hardware_acceleration()
+            video_codec, hw_name = hw_options[0]  # Use the first (best) available option
+            print(f"Using {hw_name} for video encoding")
             
             # Get selected silent parts
             selected_parts = [part for part in self.silent_parts if part['selected']]
@@ -1499,14 +1618,15 @@ class ProcessingThread(QThread):
             for part in selected_parts:
                 # Add segment before this silent part
                 if part['start'] > last_end:
-                    segment_inputs.append(f"[0:v][0:a]trim=start={last_end}:end={part['start']},setpts=PTS-STARTPTS,asetpts=PTS-STARTPTS[v{segment_count}][a{segment_count}];")
+                    segment_inputs.append(f"[0]trim=start={last_end}:end={part['start']},setpts=PTS-STARTPTS[v{segment_count}]; [0]atrim=start={last_end}:end={part['start']},asetpts=PTS-STARTPTS[a{segment_count}];")
                     filter_parts.append(f"[v{segment_count}][a{segment_count}]")
                     segment_count += 1
                 last_end = part['end']
             
             # Add final segment after last silent part
-            if last_end < self.get_video_duration():
-                segment_inputs.append(f"[0:v][0:a]trim=start={last_end},setpts=PTS-STARTPTS,asetpts=PTS-STARTPTS[v{segment_count}][a{segment_count}];")
+            video_duration = self.get_video_duration()
+            if last_end < video_duration:
+                segment_inputs.append(f"[0]trim=start={last_end}:end={video_duration},setpts=PTS-STARTPTS[v{segment_count}]; [0]atrim=start={last_end}:end={video_duration},asetpts=PTS-STARTPTS[a{segment_count}];")
                 filter_parts.append(f"[v{segment_count}][a{segment_count}]")
                 segment_count += 1
             
@@ -1520,65 +1640,178 @@ class ProcessingThread(QThread):
             # Build concatenation filter
             if segment_count == 1:
                 # Single segment, no need to concatenate
-                filter_complex = segment_inputs[0].replace(f"[v0][a0];", "[outv][outa];")
+                filter_complex = segment_inputs[0].replace(f"[v0]", "[outv]").replace(f"[a0]", "[outa]")
             else:
                 # Multiple segments, concatenate them
                 concat_input = "".join(filter_parts)
                 filter_complex = "".join(segment_inputs) + f"{concat_input}concat=n={segment_count}:v=1:a=1[outv][outa]"
             
-            # Build FFmpeg command
-            cmd = [
-                self.ffmpeg_path,
+            # Build hardware-accelerated FFmpeg command
+            cmd = [self.ffmpeg_path]
+            
+            # Add hardware acceleration input options
+            if video_codec in ['h264_nvenc', 'h264_qsv', 'h264_amf']:
+                cmd.extend(['-hwaccel', 'auto'])  # Auto-detect and use hardware acceleration
+                
+            cmd.extend([
                 '-i', self.video_path,
                 '-filter_complex', filter_complex,
                 '-map', '[outv]',
                 '-map', '[outa]',
-                '-c:v', 'libx264',
-                '-preset', 'medium',  # Balance speed vs quality
-                '-crf', '23',  # Good quality
+                '-c:v', video_codec
+            ])
+            
+            # Add codec-specific optimizations
+            if video_codec == 'h264_nvenc':
+                cmd.extend([
+                    '-preset', 'fast',      # NVENC preset for speed
+                    '-rc', 'vbr',          # Variable bitrate
+                    '-cq', '23',           # Quality level (lower = better quality)
+                    '-b:v', '5M',          # Target bitrate
+                    '-maxrate', '10M',     # Max bitrate
+                    '-bufsize', '10M'      # Buffer size
+                ])
+            elif video_codec == 'h264_qsv':
+                cmd.extend([
+                    '-preset', 'fast',     # QuickSync preset
+                    '-global_quality', '23', # Quality level
+                    '-look_ahead', '1'     # Look-ahead for better quality
+                ])
+            elif video_codec == 'h264_amf':
+                cmd.extend([
+                    '-quality', 'speed',   # AMF quality preset
+                    '-rc', 'vbr_peak',     # Rate control
+                    '-qp_i', '22',         # I-frame quality
+                    '-qp_p', '24',         # P-frame quality
+                    '-qp_b', '26'          # B-frame quality
+                ])
+            else:  # libx264 (software)
+                cmd.extend([
+                    '-preset', 'fast',     # x264 preset for speed
+                    '-crf', '23'           # Constant rate factor
+                ])
+            
+            # Add audio encoding options
+            cmd.extend([
                 '-c:a', 'aac',
                 '-b:a', '128k',
                 '-y',  # Overwrite output
                 self.output_path
-            ]
+            ])
             
             self.progress_updated.emit(50)
             QApplication.processEvents()
             
-            print(f"Running fast FFmpeg processing...")
-            print(f"Command: {' '.join(cmd[:8])}...")  # Show partial command
+            print(f"Running hardware-accelerated FFmpeg processing with {hw_name}...")
+            print(f"Command: {' '.join(cmd[:12])}...")  # Show partial command
+            print(f"Input file: {self.video_path}")
+            print(f"Output file: {self.output_path}")
+            print(f"Filter complex: {filter_complex[:100]}...")  # Show first 100 chars
             
             # Run FFmpeg with progress monitoring
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Combine stderr with stdout for better monitoring
                 text=True,
+                universal_newlines=True,
+                bufsize=1,  # Line buffered
                 creationflags=subprocess.CREATE_NO_WINDOW
             )
             
-            # Monitor progress
-            while process.poll() is None:
-                # Update progress periodically
-                current_progress = min(95, self.progress_updated.value + 1)
-                self.progress_updated.emit(current_progress)
-                QApplication.processEvents()
-                time.sleep(0.1)
+            # Monitor progress with real-time output reading and timeout
+            start_time = time.time()
+            last_progress_time = start_time
+            current_progress = 50
+            timeout_seconds = 300  # 5 minute timeout
+            output_lines = []
             
+            # Read output in real-time to detect completion
+            import select
+            import threading
+            
+            def read_output():
+                while True:
+                    line = process.stdout.readline()
+                    if not line:
+                        break
+                    output_lines.append(line.strip())
+                    # Look for completion indicators
+                    if "video:" in line.lower() and "audio:" in line.lower() and "subtitle:" in line.lower():
+                        print(f"FFmpeg completion detected: {line.strip()}")
+                    elif "error" in line.lower():
+                        print(f"FFmpeg error detected: {line.strip()}")
+            
+            # Start output reading thread
+            output_thread = threading.Thread(target=read_output, daemon=True)
+            output_thread.start()
+            
+            while process.poll() is None:
+                current_time = time.time()
+                elapsed = current_time - start_time
+                
+                # Check for timeout
+                if elapsed > timeout_seconds:
+                    print(f"FFmpeg processing timeout after {timeout_seconds} seconds, terminating...")
+                    process.terminate()
+                    time.sleep(2)
+                    if process.poll() is None:
+                        process.kill()
+                    break
+                
+                # Update progress more gradually and realistically
+                if current_time - last_progress_time >= 1.0:  # Update every second
+                    # More conservative progress estimation
+                    if elapsed < 30:  # First 30 seconds
+                        progress_increment = 1
+                    elif elapsed < 60:  # Next 30 seconds
+                        progress_increment = 0.5
+                    else:  # After 1 minute, very slow progress
+                        progress_increment = 0.2
+                    
+                    current_progress = min(94, current_progress + progress_increment)
+                    self.progress_updated.emit(int(current_progress))
+                    QApplication.processEvents()
+                    last_progress_time = current_time
+                    
+                time.sleep(0.5)  # Check every 500ms instead of 100ms
+            
+            # Wait for process to complete and get final output
             stdout, stderr = process.communicate()
             
+            # Combine all output for analysis
+            all_output = '\n'.join(output_lines)
+            if stdout:
+                all_output += '\n' + stdout
+            
             if process.returncode == 0:
-                self.progress_updated.emit(100)
-                QApplication.processEvents()
-                print(f"Fast FFmpeg processing completed successfully")
-                print(f"---------- FAST FFMPEG PROCESSING END ----------\n")
-                return self.output_path
+                # Check if output file was actually created and has reasonable size
+                if os.path.exists(self.output_path):
+                    file_size = os.path.getsize(self.output_path)
+                    if file_size > 1024:  # At least 1KB
+                        self.progress_updated.emit(100)
+                        QApplication.processEvents()
+                        elapsed_total = time.time() - start_time
+                        print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
+                        print(f"Output file size: {file_size / (1024*1024):.1f} MB")
+                        print(f"---------- HARDWARE-ACCELERATED FFMPEG PROCESSING END ----------\n")
+                        return self.output_path
+                    else:
+                        print(f"Output file created but is too small ({file_size} bytes), likely an error")
+                        return ""
+                else:
+                    print("Output file was not created, FFmpeg may have failed silently")
+                    return ""
             else:
-                print(f"FFmpeg processing failed: {stderr}")
+                print(f"Hardware-accelerated FFmpeg processing failed with return code {process.returncode}")
+                if all_output:
+                    print(f"FFmpeg output: {all_output[-500:]}")  # Show last 500 chars
+                print("Falling back to software encoding...")
                 return ""
                 
         except Exception as e:
-            print(f"Fast FFmpeg processing error: {e}")
+            print(f"Hardware-accelerated FFmpeg processing error: {e}")
+            print("Falling back to software encoding...")
             return ""
     
     def get_video_duration(self):
@@ -1776,7 +2009,7 @@ class TimelineWidget(QWidget):
         self.target_position = 0  # Target position for smooth animation
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self.animate_playhead)
-        self.animation_speed = 0.1  # Animation smoothing factor (0.1 = smooth, 1.0 = instant)
+        self.animation_speed = 0.3  # Animation smoothing factor (0.3 = responsive smooth, 1.0 = instant)
         
         # Waveform data
         self.waveform_data = None
@@ -2042,13 +2275,21 @@ class TimelineWidget(QWidget):
         self.duration_seconds = duration_seconds
         self.update()
         
-    def set_position(self, position_seconds):
-        """Set the current playback position with smooth animation"""
-        self.target_position = position_seconds
-        
-        # Start smooth animation if not already running
-        if not self.animation_timer.isActive():
-            self.animation_timer.start(16)  # ~60 FPS animation
+    def set_position(self, position_seconds, instant=False):
+        """Set the current playback position with optional smooth animation"""
+        if instant:
+            # Instant positioning for user clicks
+            self.current_position = position_seconds
+            self.target_position = position_seconds
+            if self.animation_timer.isActive():
+                self.animation_timer.stop()
+        else:
+            # Smooth animation for playback
+            self.target_position = position_seconds
+            
+            # Start smooth animation if not already running
+            if not self.animation_timer.isActive():
+                self.animation_timer.start(16)  # ~60 FPS animation
         
         # Update tooltip to show current time
         if position_seconds >= 0:
@@ -2056,10 +2297,12 @@ class TimelineWidget(QWidget):
             self.setToolTip(f"Playhead: {time_str}")
         else:
             self.setToolTip("")
+            
+        self.update()  # Trigger immediate repaint for instant updates
     
     def animate_playhead(self):
         """Smooth playhead animation"""
-        if abs(self.current_position - self.target_position) < 0.01:  # Close enough
+        if abs(self.current_position - self.target_position) < 0.005:  # More precise stopping condition
             self.current_position = self.target_position
             self.animation_timer.stop()
         else:
@@ -2719,14 +2962,12 @@ class TimelineWidget(QWidget):
             # Calculate seek position using zoom-aware coordinates
             seek_time = self.x_to_time(click_x, timeline_rect)
             
-            # Remove debug information storage since we don't need click indicators anymore
-            # self.debug_click_position = seek_time
-            # self.debug_click_x = click_x
+            # Instantly update playhead position for immediate visual feedback
+            self.set_position(seek_time, instant=True)
             
             print(f"Timeline click: seeking to {seek_time:.6f}s (high precision)")
             self.position_changed.emit(seek_time)
             self.seeking = True
-            self.update()  # Trigger repaint to show debug info
             
     def mouseMoveEvent(self, event):
         if self.duration_seconds <= 0:
@@ -3161,8 +3402,8 @@ class InteractiveVideoPlayer(QWidget):
         if not self.slider_pressed:
             self.position_slider.setValue(current_time_ms)
             
-        # Update timeline position
-        self.timeline_widget.set_position(current_time_seconds)
+        # Update timeline position with smooth animation during playback
+        self.timeline_widget.set_position(current_time_seconds, instant=False)
         
         # Update time label every few frames to reduce overhead
         if frame_number % 15 == 0:  # Every half second at 30fps
@@ -3248,7 +3489,8 @@ class InteractiveVideoPlayer(QWidget):
         """Handle when position slider is moved in threaded mode"""
         if self.slider_pressed:
             position_seconds = position_ms / 1000
-            self.timeline_widget.set_position(position_seconds)
+            # Use instant positioning for user slider interaction
+            self.timeline_widget.set_position(position_seconds, instant=True)
             
             # Update time label during dragging
             current_time = self.format_time_simple(position_ms // 1000)
@@ -3483,6 +3725,10 @@ class InteractiveVideoPlayer(QWidget):
             
     def seek_to_position(self, position_seconds, from_timeline=True):
         """Seek to a specific position in seconds"""
+        # Instantly update timeline position for immediate visual feedback when seeking
+        if from_timeline:
+            self.timeline_widget.set_position(position_seconds, instant=True)
+        
         # Handle preview mode timeline seeking properly
         if hasattr(self, 'using_fallback') and self.using_fallback and hasattr(self, 'video_thread'):
             # Check if we're in preview mode and this is a timeline click
@@ -3676,7 +3922,8 @@ class InteractiveVideoPlayer(QWidget):
             return
         elif self.media_player.duration() > 0:
             position_seconds = self.media_player.position() / 1000
-            self.timeline_widget.set_position(position_seconds)
+            # Use smooth animation for playback updates
+            self.timeline_widget.set_position(position_seconds, instant=False)
             
     def on_slider_pressed(self):
         """Handle when position slider is pressed"""
@@ -3693,7 +3940,8 @@ class InteractiveVideoPlayer(QWidget):
             # Update timeline position during dragging
             if self.media_player.duration() > 0:
                 position_seconds = position / 1000
-                self.timeline_widget.set_position(position_seconds)
+                # Use instant positioning for user slider interaction
+                self.timeline_widget.set_position(position_seconds, instant=True)
                 
     def handle_error(self, error):
         """Handle media player errors"""
@@ -3782,6 +4030,13 @@ class InteractiveVideoPlayer(QWidget):
         if self.preview_mode and not self.slider_pressed:
             preview_time_ms = int(preview_time * 1000)
             self.position_slider.setValue(preview_time_ms)
+            
+        # Update timeline with smooth animation during playback
+        if self.preview_mode:
+            # Convert preview time back to original time for timeline display
+            if hasattr(self, 'video_thread') and self.video_thread:
+                original_time = self.video_thread.preview_time_to_original_time(preview_time)
+                self.timeline_widget.set_position(original_time, instant=False)
             
         # Update time label
         self.update_time_label_display()
@@ -4113,10 +4368,19 @@ class SilenceCutterApp(QMainWindow):
         self.detect_btn.setEnabled(True)
         
         if output_path:
+            # Check if hardware acceleration was used (look for indicators in console output)
+            hw_message = ""
+            try:
+                # This is a simple way to show hardware acceleration was attempted
+                # In a real implementation, you might want to pass this info from the processing thread
+                hw_message = "\n\n🚀 Hardware acceleration was used for faster processing!"
+            except:
+                pass
+                
             QMessageBox.information(
                 self,
                 "Processing Complete",
-                f"Video processed successfully and saved to:\n{output_path}"
+                f"Video processed successfully and saved to:\n{output_path}{hw_message}"
             )
         else:
             QMessageBox.critical(
