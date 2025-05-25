@@ -1764,6 +1764,11 @@ class TimelineWidget(QWidget):
         # Preview mode support
         self.preview_mode = False
         
+        # Debug information
+        self.debug_click_position = None  # Last click position in seconds
+        self.debug_click_x = None  # Last click X coordinate
+        self.show_debug_info = True  # Toggle to show/hide debug info
+        
         # Waveform data
         self.waveform_data = None
         self.waveform_max_amplitude = 0
@@ -1822,6 +1827,13 @@ class TimelineWidget(QWidget):
             return
         elif event.key() == Qt.Key_0:
             self.reset_zoom()
+            event.accept()
+            return
+        elif event.key() == Qt.Key_D:
+            # Toggle debug info display
+            self.show_debug_info = not self.show_debug_info
+            self.update()
+            print(f"Debug info display: {'ON' if self.show_debug_info else 'OFF'}")
             event.accept()
             return
             
@@ -2068,19 +2080,26 @@ class TimelineWidget(QWidget):
             # Normal mode: click time is already in original timeline
             return click_time_seconds
             
-        # Preview mode: convert preview timeline position to original timeline position
-        if not self.silent_parts:
-            return click_time_seconds
+        # Since we're always clicking on the original timeline/waveform, 
+        # no conversion is needed - the click is already in original time coordinates
+        print(f"🎯 TIMELINE CLICK (No Conversion Needed):")
+        print(f"  Click position: {click_time_seconds:.3f}s (already in original timeline)")
+        return click_time_seconds
+        
+    def original_time_to_preview_time(self, original_time):
+        """Convert original video time to preview timeline position"""
+        if not self.preview_mode or not self.silent_parts:
+            return original_time
             
         # Get selected silent parts (ones that will be cut)
         selected_silent_parts = [part for part in self.silent_parts if part['selected']]
         if not selected_silent_parts:
-            return click_time_seconds
+            return original_time
             
         # Sort by start time
         selected_silent_parts.sort(key=lambda x: x['start'])
         
-        # Build segments that will be kept (same logic as video thread)
+        # Build segments that will be kept
         preview_segments = []
         last_end = 0
         
@@ -2094,26 +2113,22 @@ class TimelineWidget(QWidget):
         if last_end < self.duration_seconds:
             preview_segments.append((last_end, self.duration_seconds))
             
-        # Convert preview timeline position to original time
-        if click_time_seconds <= 0:
-            return preview_segments[0][0] if preview_segments else 0
-            
-        accumulated_time = 0
+        # Convert original time to preview timeline position
+        accumulated_preview_time = 0
         for start, end in preview_segments:
-            segment_duration = end - start
-            if accumulated_time + segment_duration >= click_time_seconds:
-                # The position is within this segment
-                offset_in_segment = click_time_seconds - accumulated_time
-                original_time = start + offset_in_segment
-                print(f"🎯 TIMELINE CLICK CONVERSION:")
-                print(f"  Preview click: {click_time_seconds:.3f}s")
-                print(f"  Original time: {original_time:.3f}s")
-                print(f"  Segment: {start:.3f}s - {end:.3f}s")
-                return original_time
-            accumulated_time += segment_duration
-            
-        # If we get here, click_time_seconds is beyond the end
-        return preview_segments[-1][1] if preview_segments else self.duration_seconds
+            if start <= original_time <= end:
+                # The time is within this segment
+                offset_in_segment = original_time - start
+                return accumulated_preview_time + offset_in_segment
+            elif original_time < start:
+                # The time is before this segment (in a cut area)
+                return accumulated_preview_time
+            else:
+                # The time is after this segment, continue accumulating
+                accumulated_preview_time += (end - start)
+                
+        # If we get here, original_time is after all segments
+        return accumulated_preview_time
         
     def get_visible_time_range(self):
         """Get the currently visible time range based on zoom and offset"""
@@ -2159,14 +2174,19 @@ class TimelineWidget(QWidget):
     def x_to_time(self, x, timeline_rect):
         """Convert X coordinate to time considering zoom and offset"""
         relative_pos = (x - timeline_rect.left()) / timeline_rect.width()
-        start_time, end_time = self.get_visible_time_range()
-        preview_time = start_time + relative_pos * (end_time - start_time)
         
-        # In preview mode, convert the preview timeline position to original time
-        if self.preview_mode:
-            return self.convert_click_position_to_original_time(preview_time)
-        else:
-            return preview_time
+        # ALWAYS use original timeline coordinates for clicks since we're clicking on the original waveform
+        # The waveform and silence regions are always displayed in original timeline coordinates
+        start_time, end_time = self.get_original_visible_time_range()
+        original_time = start_time + relative_pos * (end_time - start_time)
+        
+        print(f"🎯 X_TO_TIME CONVERSION:")
+        print(f"  Click X: {x:.1f}, Timeline width: {timeline_rect.width():.1f}")
+        print(f"  Relative pos: {relative_pos:.3f}")
+        print(f"  Visible range: {start_time:.3f}s - {end_time:.3f}s")
+        print(f"  Calculated original time: {original_time:.3f}s")
+        
+        return original_time
         
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -2328,6 +2348,9 @@ class TimelineWidget(QWidget):
                                    int(timeline_rect.bottom() + 25), time_text)
             current_marker += marker_interval
             
+        # Draw debug information at the top
+        self.draw_debug_info(painter, timeline_rect)
+        
         # Draw zoom info and reset button when zoomed
         if self.zoom_level != 1.0:
             zoom_text = f"Zoom: {self.zoom_level:.1f}x"
@@ -2474,6 +2497,104 @@ class TimelineWidget(QWidget):
             painter.drawLine(int(timeline_rect.left()), int(y1), int(timeline_rect.right()), int(y1))
             painter.drawLine(int(timeline_rect.left()), int(y2), int(timeline_rect.right()), int(y2))
     
+    def draw_debug_info(self, painter, timeline_rect):
+        """Draw debug information showing click position and playhead position"""
+        if not self.show_debug_info:
+            return
+            
+        # Prepare debug text
+        debug_lines = []
+        
+        # Current playhead position
+        if self.current_position >= 0:
+            playhead_time_str = self.format_time_debug(self.current_position)
+            if self.preview_mode:
+                # In preview mode, show both original and preview timeline positions
+                preview_pos = self.original_time_to_preview_time(self.current_position)
+                preview_time_str = self.format_time_debug(preview_pos)
+                debug_lines.append(f"Playhead: {playhead_time_str} (orig) | {preview_time_str} (preview)")
+            else:
+                debug_lines.append(f"Playhead: {playhead_time_str}")
+        
+        # Last click position
+        if self.debug_click_position is not None:
+            click_time_str = self.format_time_debug(self.debug_click_position)
+            if self.preview_mode:
+                # In preview mode, show the conversion
+                original_time = self.convert_click_position_to_original_time(self.debug_click_position)
+                original_time_str = self.format_time_debug(original_time)
+                debug_lines.append(f"Last Click: {click_time_str} → {original_time_str} (converted)")
+            else:
+                debug_lines.append(f"Last Click: {click_time_str}")
+        
+        # Timeline mode
+        mode_text = "Preview Mode" if self.preview_mode else "Normal Mode"
+        if self.preview_mode and hasattr(self, 'preview_timeline_duration'):
+            duration_str = self.format_time_debug(self.preview_timeline_duration)
+            debug_lines.append(f"Mode: {mode_text} (Duration: {duration_str})")
+        else:
+            duration_str = self.format_time_debug(self.duration_seconds)
+            debug_lines.append(f"Mode: {mode_text} (Duration: {duration_str})")
+        
+        # Zoom info
+        if self.zoom_level != 1.0:
+            start_time, end_time = self.get_visible_time_range()
+            visible_start_str = self.format_time_debug(start_time)
+            visible_end_str = self.format_time_debug(end_time)
+            debug_lines.append(f"Visible: {visible_start_str} - {visible_end_str}")
+        
+        if not debug_lines:
+            return
+            
+        # Set up drawing
+        painter.setFont(QFont("Consolas", 8))  # Monospace font for better alignment
+        painter.setPen(QPen(QColor(0, 0, 0), 1))
+        
+        # Calculate background size
+        line_height = 14
+        max_width = 0
+        for line in debug_lines:
+            text_rect = painter.fontMetrics().boundingRect(line)
+            max_width = max(max_width, text_rect.width())
+        
+        # Draw background
+        bg_width = max_width + 16
+        bg_height = len(debug_lines) * line_height + 8
+        bg_rect = QRectF(5, 5, bg_width, bg_height)
+        
+        # Semi-transparent background
+        painter.fillRect(bg_rect, QColor(255, 255, 255, 220))
+        painter.setPen(QPen(QColor(150, 150, 150), 1))
+        painter.drawRect(bg_rect)
+        
+        # Draw debug text
+        painter.setPen(QPen(QColor(0, 0, 0), 1))
+        y_pos = 18
+        for line in debug_lines:
+            painter.drawText(13, y_pos, line)
+            y_pos += line_height
+            
+        # Draw click position indicator if available
+        if self.debug_click_x is not None and timeline_rect.contains(self.debug_click_x, timeline_rect.center().y()):
+            # Draw a vertical line at click position
+            painter.setPen(QPen(QColor(255, 0, 0, 150), 2))
+            painter.drawLine(int(self.debug_click_x), int(timeline_rect.top() - 3), 
+                           int(self.debug_click_x), int(timeline_rect.bottom() + 3))
+            
+            # Draw click marker
+            painter.setBrush(QBrush(QColor(255, 0, 0, 180)))
+            painter.setPen(QPen(QColor(200, 0, 0), 2))
+            click_marker = QRectF(self.debug_click_x - 3, timeline_rect.top() - 8, 6, 6)
+            painter.drawEllipse(click_marker)
+    
+    def format_time_debug(self, seconds):
+        """Format time with high precision for debug display"""
+        if seconds < 0:
+            return "00:00.000"
+        minutes = int(seconds // 60)
+        secs = seconds % 60
+        return f"{minutes:02d}:{secs:06.3f}"
+        
     def format_time_simple(self, seconds):
         """Format time in MM:SS format"""
         minutes = int(seconds // 60)
@@ -2551,9 +2672,15 @@ class TimelineWidget(QWidget):
         if timeline_rect.contains(click_x, click_y):
             # Calculate seek position using zoom-aware coordinates
             seek_time = self.x_to_time(click_x, timeline_rect)
+            
+            # Store debug information
+            self.debug_click_position = seek_time
+            self.debug_click_x = click_x
+            
             print(f"Timeline click: seeking to {seek_time:.6f}s (high precision)")
             self.position_changed.emit(seek_time)
             self.seeking = True
+            self.update()  # Trigger repaint to show debug info
             
     def mouseMoveEvent(self, event):
         if self.duration_seconds <= 0:
@@ -2715,7 +2842,7 @@ class InteractiveVideoPlayer(QWidget):
         timeline_layout.setSpacing(2)  # Reduce spacing
         
         # Timeline label - smaller font
-        timeline_label = QLabel("Interactive Timeline - Click regions to toggle, drag edges to adjust (Preview mode auto-enabled)")
+        timeline_label = QLabel("Interactive Timeline - Click regions to toggle, drag edges to adjust (Preview mode auto-enabled) | Press 'D' for debug info")
         timeline_label.setFont(QFont("Arial", 9))  # Reduced from 10
         timeline_label.setAlignment(Qt.AlignCenter)
         timeline_layout.addWidget(timeline_label)
