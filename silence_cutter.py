@@ -1767,7 +1767,16 @@ class TimelineWidget(QWidget):
         # Debug information
         self.debug_click_position = None  # Last click position in seconds
         self.debug_click_x = None  # Last click X coordinate
-        self.show_debug_info = True  # Toggle to show/hide debug info
+        self.show_debug_info = False  # Toggle to show/hide debug info (disabled by default)
+        
+        # Tooltip for playhead
+        self.setToolTip("")
+        
+        # Smooth playhead animation
+        self.target_position = 0  # Target position for smooth animation
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.animate_playhead)
+        self.animation_speed = 0.1  # Animation smoothing factor (0.1 = smooth, 1.0 = instant)
         
         # Waveform data
         self.waveform_data = None
@@ -2034,9 +2043,31 @@ class TimelineWidget(QWidget):
         self.update()
         
     def set_position(self, position_seconds):
-        """Set the current playback position"""
-        self.current_position = position_seconds
-        self.update()
+        """Set the current playback position with smooth animation"""
+        self.target_position = position_seconds
+        
+        # Start smooth animation if not already running
+        if not self.animation_timer.isActive():
+            self.animation_timer.start(16)  # ~60 FPS animation
+        
+        # Update tooltip to show current time
+        if position_seconds >= 0:
+            time_str = self.format_time_mmss_ms(position_seconds)
+            self.setToolTip(f"Playhead: {time_str}")
+        else:
+            self.setToolTip("")
+    
+    def animate_playhead(self):
+        """Smooth playhead animation"""
+        if abs(self.current_position - self.target_position) < 0.01:  # Close enough
+            self.current_position = self.target_position
+            self.animation_timer.stop()
+        else:
+            # Smooth interpolation towards target
+            diff = self.target_position - self.current_position
+            self.current_position += diff * self.animation_speed
+        
+        self.update()  # Trigger repaint
         
     def set_silent_parts(self, silent_parts, silent_ranges):
         """Set the silent parts and ranges for visualization"""
@@ -2301,6 +2332,22 @@ class TimelineWidget(QWidget):
             painter.setPen(QPen(QColor(0, 120, 215), 3))
             painter.drawLine(int(pos_x), int(timeline_rect.top() - 5), int(pos_x), int(timeline_rect.bottom() + 5))
             
+            # Draw time indicator above the playhead like in reference image
+            time_str = self.format_time_mmss_ms(self.current_position)
+            painter.setFont(QFont("Arial", 8, QFont.Bold))
+            text_rect = painter.fontMetrics().boundingRect(time_str)
+            
+            # Draw time background
+            time_bg_rect = QRectF(pos_x - text_rect.width()/2 - 4, timeline_rect.top() - 35, 
+                                text_rect.width() + 8, text_rect.height() + 4)
+            painter.fillRect(time_bg_rect, QColor(0, 120, 215, 200))
+            painter.setPen(QPen(QColor(0, 80, 160), 1))
+            painter.drawRect(time_bg_rect)
+            
+            # Draw time text
+            painter.setPen(QPen(QColor(255, 255, 255), 1))
+            painter.drawText(int(pos_x - text_rect.width()/2), int(timeline_rect.top() - 20), time_str)
+            
             # Draw position indicator triangle with gradient
             triangle_points = [
                 QPointF(pos_x, timeline_rect.top() - 5),
@@ -2315,22 +2362,24 @@ class TimelineWidget(QWidget):
             painter.setPen(QPen(QColor(0, 80, 160), 2))
             painter.drawPolygon(triangle_points)
         
-        # Draw time markers with zoom awareness (use original timeline coordinates)
-        painter.setPen(QPen(QColor(100, 100, 100), 1))
-        painter.setFont(QFont("Arial", 8))
+        # Draw clean time markers at top like in the reference image
+        painter.setPen(QPen(QColor(200, 200, 200), 1))
+        painter.setFont(QFont("Arial", 9))
         
         # Calculate appropriate marker interval based on zoom (use original timeline)
         visible_duration = (original_end_time - original_start_time)
         if visible_duration > 300:  # > 5 minutes
             marker_interval = 60  # 1 minute
         elif visible_duration > 60:  # > 1 minute  
-            marker_interval = 10  # 10 seconds
-        elif visible_duration > 20:  # > 20 seconds
+            marker_interval = 15  # 15 seconds
+        elif visible_duration > 30:  # > 30 seconds
+            marker_interval = 10   # 10 seconds
+        elif visible_duration > 10:  # > 10 seconds
             marker_interval = 5   # 5 seconds
         else:
             marker_interval = 1   # 1 second
             
-        # Draw markers (use original timeline coordinates)
+        # Draw markers at the top (use original timeline coordinates)
         first_marker = int(original_start_time / marker_interval) * marker_interval
         current_marker = first_marker
         
@@ -2338,14 +2387,15 @@ class TimelineWidget(QWidget):
             if current_marker >= 0:
                 marker_x = self.original_time_to_x(current_marker, timeline_rect)
                 if timeline_rect.left() <= marker_x <= timeline_rect.right():
-                    painter.drawLine(int(marker_x), int(timeline_rect.bottom() + 2), 
-                                   int(marker_x), int(timeline_rect.bottom() + 10))
+                    # Draw small tick mark at top
+                    painter.drawLine(int(marker_x), int(timeline_rect.top() - 8), 
+                                   int(marker_x), int(timeline_rect.top() - 3))
                     
-                    # Draw time text
-                    time_text = self.format_time_simple(current_marker)
+                    # Draw time text above the timeline
+                    time_text = self.format_time_mmss_ms(current_marker)
                     text_rect = painter.fontMetrics().boundingRect(time_text)
                     painter.drawText(int(marker_x - text_rect.width()/2), 
-                                   int(timeline_rect.bottom() + 25), time_text)
+                                   int(timeline_rect.top() - 12), time_text)
             current_marker += marker_interval
             
         # Draw debug information at the top
@@ -2574,18 +2624,7 @@ class TimelineWidget(QWidget):
             painter.drawText(13, y_pos, line)
             y_pos += line_height
             
-        # Draw click position indicator if available
-        if self.debug_click_x is not None and timeline_rect.contains(self.debug_click_x, timeline_rect.center().y()):
-            # Draw a vertical line at click position
-            painter.setPen(QPen(QColor(255, 0, 0, 150), 2))
-            painter.drawLine(int(self.debug_click_x), int(timeline_rect.top() - 3), 
-                           int(self.debug_click_x), int(timeline_rect.bottom() + 3))
-            
-            # Draw click marker
-            painter.setBrush(QBrush(QColor(255, 0, 0, 180)))
-            painter.setPen(QPen(QColor(200, 0, 0), 2))
-            click_marker = QRectF(self.debug_click_x - 3, timeline_rect.top() - 8, 6, 6)
-            painter.drawEllipse(click_marker)
+        # Click indicator removed for cleaner design
     
     def format_time_debug(self, seconds):
         """Format time with high precision for debug display"""
@@ -2600,6 +2639,13 @@ class TimelineWidget(QWidget):
         minutes = int(seconds // 60)
         seconds = int(seconds % 60)
         return f"{minutes:02d}:{seconds:02d}"
+        
+    def format_time_mmss_ms(self, seconds):
+        """Format time in HH:MM:SS format"""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
         
     def mousePressEvent(self, event):
         if event.button() != Qt.LeftButton or self.duration_seconds <= 0:
@@ -2673,9 +2719,9 @@ class TimelineWidget(QWidget):
             # Calculate seek position using zoom-aware coordinates
             seek_time = self.x_to_time(click_x, timeline_rect)
             
-            # Store debug information
-            self.debug_click_position = seek_time
-            self.debug_click_x = click_x
+            # Remove debug information storage since we don't need click indicators anymore
+            # self.debug_click_position = seek_time
+            # self.debug_click_x = click_x
             
             print(f"Timeline click: seeking to {seek_time:.6f}s (high precision)")
             self.position_changed.emit(seek_time)
@@ -2842,7 +2888,7 @@ class InteractiveVideoPlayer(QWidget):
         timeline_layout.setSpacing(2)  # Reduce spacing
         
         # Timeline label - smaller font
-        timeline_label = QLabel("Interactive Timeline - Click regions to toggle, drag edges to adjust (Preview mode auto-enabled) | Press 'D' for debug info")
+        timeline_label = QLabel("Interactive Timeline - Click regions to toggle, drag edges to adjust (Preview mode auto-enabled)")
         timeline_label.setFont(QFont("Arial", 9))  # Reduced from 10
         timeline_label.setAlignment(Qt.AlignCenter)
         timeline_layout.addWidget(timeline_label)
@@ -2855,54 +2901,55 @@ class InteractiveVideoPlayer(QWidget):
         
         layout.addWidget(timeline_frame)
         
-        # Control buttons - more compact layout
+        # Control buttons - keep play/pause, stop, and volume controls visible
         controls_layout = QHBoxLayout()
-        controls_layout.setSpacing(8)  # Reduce spacing between controls
+        controls_layout.setSpacing(8)
         
         self.play_pause_btn = QPushButton("Play")
         self.play_pause_btn.clicked.connect(self.toggle_play_pause)
         self.play_pause_btn.setEnabled(False)
-        self.play_pause_btn.setMaximumWidth(80)  # Make buttons more compact
+        self.play_pause_btn.setMaximumWidth(80)
         
         self.stop_btn = QPushButton("Stop")
         self.stop_btn.clicked.connect(self.stop_video)
         self.stop_btn.setEnabled(False)
         self.stop_btn.setMaximumWidth(80)
         
-        # Position slider
+        # Position slider (hidden - timeline provides this functionality)
         self.position_slider = QSlider(Qt.Horizontal)
         self.position_slider.setEnabled(False)
         self.position_slider.sliderPressed.connect(self.on_slider_pressed)
         self.position_slider.sliderReleased.connect(self.on_slider_released)
         self.position_slider.sliderMoved.connect(self.on_slider_moved)
+        self.position_slider.hide()  # Hide the time slider
         
-        # Time labels with preview info - smaller font
+        # Time labels (hidden - timeline shows time)
         self.time_label = QLabel("00:00 / 00:00")
-        self.time_label.setFont(QFont("Arial", 9))  # Reduced from 10
-        self.time_label.setMinimumWidth(120)  # Increased to show preview info
+        self.time_label.setFont(QFont("Arial", 9))
+        self.time_label.setMinimumWidth(120)
+        self.time_label.hide()  # Hide the time label
         
-        # Volume control - more compact
-        volume_label = QLabel("Vol:")  # Shortened label
+        # Volume control - keep visible
+        volume_label = QLabel("Volume:")
         volume_label.setFont(QFont("Arial", 9))
         self.volume_slider = QSlider(Qt.Horizontal)
         self.volume_slider.setMaximum(100)
         self.volume_slider.setValue(70)
-        self.volume_slider.setMaximumWidth(80)  # Reduced from 100
+        self.volume_slider.setMaximumWidth(100)
         self.volume_slider.valueChanged.connect(self.set_volume)
         
-        # Selection controls - more compact
-        select_all_btn = QPushButton("Select All")
+        # Selection controls
+        select_all_btn = QPushButton("Select All Silent Regions")
         select_all_btn.clicked.connect(self.select_all_silent_regions)
-        select_all_btn.setMaximumWidth(80)
+        select_all_btn.setMaximumWidth(150)
         
-        deselect_all_btn = QPushButton("Deselect All")
+        deselect_all_btn = QPushButton("Deselect All Silent Regions")
         deselect_all_btn.clicked.connect(self.deselect_all_silent_regions)
-        deselect_all_btn.setMaximumWidth(90)
+        deselect_all_btn.setMaximumWidth(150)
         
+        # Add controls to layout
         controls_layout.addWidget(self.play_pause_btn)
         controls_layout.addWidget(self.stop_btn)
-        controls_layout.addWidget(self.position_slider, 1)
-        controls_layout.addWidget(self.time_label)
         controls_layout.addWidget(volume_label)
         controls_layout.addWidget(self.volume_slider)
         controls_layout.addStretch()
@@ -2912,6 +2959,18 @@ class InteractiveVideoPlayer(QWidget):
         layout.addLayout(controls_layout)
         
         self.setLayout(layout)
+        
+        # Enable keyboard focus to receive key events
+        self.setFocusPolicy(Qt.StrongFocus)
+        
+    def keyPressEvent(self, event):
+        """Handle keyboard shortcuts"""
+        if event.key() == Qt.Key_Space:
+            # Spacebar for play/pause
+            self.toggle_play_pause()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
         
     def setup_media_player(self):
         self.media_player = QMediaPlayer(None, QMediaPlayer.VideoSurface)
