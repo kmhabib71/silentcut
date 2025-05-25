@@ -21,6 +21,173 @@ import cv2
 from proglog import ProgressBarLogger
 import pygame
 import threading
+from collections import deque
+import queue
+
+class CircularBuffer:
+    """High-performance circular buffer for video frames and audio samples"""
+    def __init__(self, max_size, item_type="frame"):
+        self.max_size = max_size
+        self.buffer = deque(maxlen=max_size)
+        self.positions = deque(maxlen=max_size)  # Track frame numbers or timestamps
+        self.item_type = item_type
+        self.lock = threading.Lock()
+        self.hits = 0
+        self.misses = 0
+        
+    def put(self, position, item):
+        """Add item to buffer with position tracking"""
+        with self.lock:
+            # Remove old item at same position if exists
+            self._remove_position(position)
+            self.buffer.append(item)
+            self.positions.append(position)
+            
+    def get(self, position):
+        """Get item at specific position, returns None if not found"""
+        with self.lock:
+            try:
+                index = list(self.positions).index(position)
+                self.hits += 1
+                return list(self.buffer)[index]
+            except ValueError:
+                self.misses += 1
+                return None
+                
+    def get_nearest(self, position, tolerance=5):
+        """Get nearest item within tolerance range"""
+        with self.lock:
+            if not self.positions:
+                return None
+                
+            # Find closest position within tolerance
+            closest_pos = None
+            closest_diff = float('inf')
+            
+            for pos in self.positions:
+                diff = abs(pos - position)
+                if diff <= tolerance and diff < closest_diff:
+                    closest_pos = pos
+                    closest_diff = diff
+                    
+            if closest_pos is not None:
+                try:
+                    index = list(self.positions).index(closest_pos)
+                    self.hits += 1
+                    return list(self.buffer)[index]
+                except ValueError:
+                    pass
+                    
+            self.misses += 1
+            return None
+            
+    def _remove_position(self, position):
+        """Remove item at specific position"""
+        try:
+            index = list(self.positions).index(position)
+            # Convert to lists for manipulation
+            buffer_list = list(self.buffer)
+            positions_list = list(self.positions)
+            
+            # Remove the item
+            buffer_list.pop(index)
+            positions_list.pop(index)
+            
+            # Rebuild deques
+            self.buffer.clear()
+            self.positions.clear()
+            self.buffer.extend(buffer_list)
+            self.positions.extend(positions_list)
+        except ValueError:
+            pass
+            
+    def clear(self):
+        """Clear the buffer"""
+        with self.lock:
+            self.buffer.clear()
+            self.positions.clear()
+            
+    def get_cache_stats(self):
+        """Get cache hit/miss statistics"""
+        total = self.hits + self.misses
+        hit_rate = (self.hits / total * 100) if total > 0 else 0
+        return {
+            'hits': self.hits,
+            'misses': self.misses,
+            'hit_rate': hit_rate,
+            'size': len(self.buffer),
+            'max_size': self.max_size
+        }
+
+class AudioCircularBuffer:
+    """Specialized circular buffer for audio samples with streaming support"""
+    def __init__(self, max_duration_seconds=10.0, sample_rate=22050):
+        self.max_samples = int(max_duration_seconds * sample_rate)
+        self.sample_rate = sample_rate
+        self.buffer = deque(maxlen=self.max_samples)
+        self.timestamps = deque(maxlen=self.max_samples)
+        self.lock = threading.Lock()
+        
+    def put_samples(self, samples, start_time):
+        """Add audio samples with timestamp"""
+        with self.lock:
+            for i, sample in enumerate(samples):
+                timestamp = start_time + (i / self.sample_rate)
+                self.buffer.append(sample)
+                self.timestamps.append(timestamp)
+                
+    def get_samples(self, start_time, duration):
+        """Get audio samples for specific time range"""
+        with self.lock:
+            if not self.timestamps:
+                return []
+                
+            end_time = start_time + duration
+            samples = []
+            
+            for i, timestamp in enumerate(self.timestamps):
+                if start_time <= timestamp <= end_time:
+                    if i < len(self.buffer):
+                        samples.append(self.buffer[i])
+                        
+            return samples
+            
+    def clear(self):
+        """Clear the audio buffer"""
+        with self.lock:
+            self.buffer.clear()
+            self.timestamps.clear()
+
+class WaveformCache:
+    """Cache for waveform data at different zoom levels"""
+    def __init__(self, max_zoom_levels=10):
+        self.cache = {}  # zoom_level -> waveform_data
+        self.max_levels = max_zoom_levels
+        self.lock = threading.Lock()
+        
+    def put(self, zoom_level, start_time, end_time, waveform_data):
+        """Cache waveform data for specific zoom level and time range"""
+        with self.lock:
+            key = (zoom_level, start_time, end_time)
+            
+            # Limit cache size
+            if len(self.cache) >= self.max_levels:
+                # Remove oldest entry
+                oldest_key = next(iter(self.cache))
+                del self.cache[oldest_key]
+                
+            self.cache[key] = waveform_data
+            
+    def get(self, zoom_level, start_time, end_time):
+        """Get cached waveform data"""
+        with self.lock:
+            key = (zoom_level, start_time, end_time)
+            return self.cache.get(key)
+            
+    def clear(self):
+        """Clear waveform cache"""
+        with self.lock:
+            self.cache.clear()
 
 class VideoPlaybackThread(QThread):
     """Dedicated thread for video frame processing with synchronized audio"""
@@ -54,6 +221,13 @@ class VideoPlaybackThread(QThread):
         self.preview_duration = 0  # Total duration after cuts
         self.current_preview_time = 0  # Current position in preview timeline
         self.current_segment_index = 0  # Which segment we're currently in
+        
+        # Circular buffer system for performance optimization
+        self.frame_buffer = CircularBuffer(max_size=30, item_type="frame")  # Reduced to 1 second at 30fps
+        self.audio_buffer = AudioCircularBuffer(max_duration_seconds=2.0)  # Reduced to 2 seconds of audio
+        self.buffer_enabled = True
+        self.prefetch_range = 5  # Reduced prefetch range
+        self.prefetch_enabled = False  # Disable prefetch during initial loading
         
     def initialize_video(self):
         """Initialize video capture and audio"""
@@ -489,40 +663,59 @@ class VideoPlaybackThread(QThread):
                     if frame_skip_counter % 2 == 0 and preview_mode:
                         should_process_frame = False
                 
-                # Read and display frame with performance optimization
+                # Read and display frame with circular buffer optimization
                 if should_process_frame:
-                    # In preview mode, we need to seek to the correct frame every time
-                    # because we're jumping over silent segments
-                    if preview_mode and playing and seek_frame < 0:
-                        # Always seek to the current frame in preview mode to skip silent segments
-                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
-                        # Debug output (only occasionally to avoid spam)
-                        if not hasattr(self, '_last_seek_debug') or time.time() - self._last_seek_debug > 1.0:
-                            self._last_seek_debug = time.time()
-                            elapsed_time = time.time() - current_playback_start
-                            print(f"🎬 VIDEO SEEK: preview_time={elapsed_time:.2f}s → seeking to frame {self.current_frame}")
-                    elif seek_frame >= 0:
-                        # Normal seeking behavior
-                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
+                    pixmap = None
+                    
+                    # Try to get frame from buffer first
+                    if self.buffer_enabled:
+                        pixmap = self.frame_buffer.get(self.current_frame)
                         
-                    ret, frame = self.cap.read()
-                    if ret:
-                        # Process frame with aggressive optimization for preview mode
-                        pixmap = self.process_frame_ultra_fast(frame) if preview_mode else self.process_frame_fast(frame)
-                        if pixmap:
-                            self.frame_ready.emit(pixmap)
-                            
-                            # Reduce UI update frequency to prevent freezing
-                            current_time = time.time()
-                            if current_time - last_ui_update > 0.1:  # Update max 10 times per second
-                                self.position_changed.emit(self.current_frame)
-                                last_ui_update = current_time
-                            
-                            # Emit preview position for timeline updates
-                            if preview_mode and current_time - last_ui_update > 0.2:
+                    if pixmap is None:
+                        # Frame not in buffer, need to read from video
+                        # In preview mode, we need to seek to the correct frame every time
+                        # because we're jumping over silent segments
+                        if preview_mode and playing and seek_frame < 0:
+                            # Always seek to the current frame in preview mode to skip silent segments
+                            self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
+                            # Debug output (only occasionally to avoid spam)
+                            if not hasattr(self, '_last_seek_debug') or time.time() - self._last_seek_debug > 1.0:
+                                self._last_seek_debug = time.time()
                                 elapsed_time = time.time() - current_playback_start
-                                # In preview mode, elapsed_time IS the preview timeline position
-                                self.preview_position_changed.emit(elapsed_time)
+                                print(f"🎬 VIDEO SEEK: preview_time={elapsed_time:.2f}s → seeking to frame {self.current_frame}")
+                        elif seek_frame >= 0:
+                            # Normal seeking behavior
+                            self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
+                            
+                        ret, frame = self.cap.read()
+                        if ret:
+                            # Process frame with aggressive optimization for preview mode
+                            pixmap = self.process_frame_ultra_fast(frame) if preview_mode else self.process_frame_fast(frame)
+                            
+                            # Store in buffer for future use
+                            if pixmap and self.buffer_enabled:
+                                self.frame_buffer.put(self.current_frame, pixmap)
+                                
+                                # Prefetch nearby frames for smoother playback (only when enabled and playing)
+                                if playing and not preview_mode and self.prefetch_enabled:
+                                    # Only prefetch occasionally to avoid performance issues
+                                    if self.current_frame % 10 == 0:  # Every 10th frame
+                                        self.prefetch_frames(self.current_frame)
+                    
+                    if pixmap:
+                        self.frame_ready.emit(pixmap)
+                        
+                        # Reduce UI update frequency to prevent freezing
+                        current_time = time.time()
+                        if current_time - last_ui_update > 0.1:  # Update max 10 times per second
+                            self.position_changed.emit(self.current_frame)
+                            last_ui_update = current_time
+                        
+                        # Emit preview position for timeline updates
+                        if preview_mode and current_time - last_ui_update > 0.2:
+                            elapsed_time = time.time() - current_playback_start
+                            # In preview mode, elapsed_time IS the preview timeline position
+                            self.preview_position_changed.emit(elapsed_time)
                 
                 # Optimized timing control with adaptive sleep
                 if playing and seek_frame < 0:
@@ -649,6 +842,64 @@ class VideoPlaybackThread(QThread):
             return pixmap
         except:
             return None
+            
+    def prefetch_frames(self, current_frame):
+        """Prefetch nearby frames for smoother playback - lightweight version"""
+        if not self.buffer_enabled or not self.prefetch_enabled:
+            return
+            
+        # Only prefetch 2-3 frames ahead to minimize performance impact
+        def prefetch_worker():
+            try:
+                for offset in range(1, min(self.prefetch_range, 3)):  # Only 2-3 frames ahead
+                    target_frame = current_frame + offset
+                    if target_frame >= self.frame_count:
+                        break
+                        
+                    # Check if frame is already in buffer
+                    if self.frame_buffer.get(target_frame) is not None:
+                        continue
+                        
+                    # Use existing video capture instead of creating new one
+                    if hasattr(self, 'cap') and self.cap:
+                        current_pos = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
+                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+                        ret, frame = self.cap.read()
+                        
+                        if ret:
+                            # Use ultra-fast processing for prefetch
+                            pixmap = self.process_frame_ultra_fast(frame)
+                            if pixmap:
+                                self.frame_buffer.put(target_frame, pixmap)
+                        
+                        # Restore original position
+                        self.cap.set(cv2.CAP_PROP_POS_FRAMES, current_pos)
+                        break  # Only prefetch one frame at a time
+                            
+            except Exception as e:
+                pass  # Silently handle prefetch errors
+                
+        # Run prefetch in background thread (daemon so it doesn't block shutdown)
+        prefetch_thread = threading.Thread(target=prefetch_worker, daemon=True)
+        prefetch_thread.start()
+        
+    def enable_prefetch(self):
+        """Enable prefetch after initial loading is complete"""
+        self.prefetch_enabled = True
+        print("🚀 Frame prefetching enabled for smoother playback")
+        
+    def disable_prefetch(self):
+        """Disable prefetch during heavy operations"""
+        self.prefetch_enabled = False
+        
+    def set_buffer_mode(self, enabled):
+        """Enable or disable all buffer operations"""
+        self.buffer_enabled = enabled
+        self.prefetch_enabled = enabled
+        if not enabled:
+            # Clear buffers to free memory
+            self.frame_buffer.clear()
+            self.audio_buffer.clear()
 
     def set_preview_mode(self, enabled, silent_parts=None):
         """Enable or disable preview mode"""
@@ -867,6 +1118,108 @@ class VideoPlaybackThread(QThread):
         except Exception as e:
             print(f"Error creating preview audio: {e}")
             return False
+
+class WaveformLoadingThread(QThread):
+    """Background thread for loading waveform data without blocking UI"""
+    waveform_loaded = pyqtSignal(object, float)  # waveform_data, max_amplitude
+    duration_loaded = pyqtSignal(float)  # duration
+    progress_updated = pyqtSignal(str)  # progress message
+    
+    def __init__(self, video_path):
+        super().__init__()
+        self.video_path = video_path
+        
+    def run(self):
+        """Load waveform data in background"""
+        try:
+            print("🌊 Loading waveform in background...")
+            self.progress_updated.emit("Loading video file...")
+            
+            # Extract audio using MoviePy
+            import moviepy.editor as mp
+            video = mp.VideoFileClip(self.video_path)
+            
+            # Emit duration immediately for instant timeline setup
+            if video.duration > 0:
+                self.duration_loaded.emit(video.duration)
+                
+            self.progress_updated.emit("Extracting audio track...")
+            
+            if video.audio is None:
+                print("No audio track found in video")
+                self.waveform_loaded.emit(None, 0)
+                video.close()
+                return
+                
+            # Create temporary audio file
+            import tempfile
+            temp_audio_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+            temp_audio_file.close()
+            
+            self.progress_updated.emit("Processing audio data...")
+            
+            # Extract audio to temporary file with optimized parameters for speed
+            video.audio.write_audiofile(
+                temp_audio_file.name, 
+                verbose=False, 
+                logger=None,
+                codec='pcm_s16le',
+                ffmpeg_params=['-ar', '22050']  # Lower sample rate for faster processing
+            )
+            video.close()
+            
+            self.progress_updated.emit("Generating waveform...")
+            
+            # Load audio with pydub
+            from pydub import AudioSegment
+            audio = AudioSegment.from_file(temp_audio_file.name)
+            
+            # Convert to mono for waveform visualization
+            if audio.channels > 1:
+                audio = audio.set_channels(1)
+                
+            # Get raw audio data
+            raw_data = audio.raw_data
+            
+            # Convert to numpy array
+            import struct
+            if audio.sample_width == 1:
+                samples = struct.unpack(f'{len(raw_data)}B', raw_data)
+                samples = [(s - 128) / 128.0 for s in samples]
+            elif audio.sample_width == 2:
+                samples = struct.unpack(f'{len(raw_data)//2}h', raw_data)
+                samples = [s / 32768.0 for s in samples]
+            elif audio.sample_width == 4:
+                samples = struct.unpack(f'{len(raw_data)//4}i', raw_data)
+                samples = [s / 2147483648.0 for s in samples]
+            else:
+                print(f"Unsupported sample width: {audio.sample_width}")
+                samples = []
+            
+            self.progress_updated.emit("Optimizing waveform display...")
+            
+            # Aggressive downsampling for smooth display
+            target_samples = 2500
+            if len(samples) > target_samples:
+                step = len(samples) // target_samples
+                samples = samples[::step]
+            
+            max_amplitude = max(abs(s) for s in samples) if samples else 1.0
+            
+            # Clean up temporary file
+            try:
+                os.unlink(temp_audio_file.name)
+            except:
+                pass
+                
+            self.progress_updated.emit("Waveform ready!")
+            
+            # Emit the loaded waveform data
+            self.waveform_loaded.emit(samples, max_amplitude)
+                
+        except Exception as e:
+            print(f"Error loading waveform: {e}")
+            self.waveform_loaded.emit(None, 0)
 
 class SilenceDetectionThread(QThread):
     progress_updated = pyqtSignal(int)
@@ -2009,12 +2362,18 @@ class TimelineWidget(QWidget):
         self.target_position = 0  # Target position for smooth animation
         self.animation_timer = QTimer()
         self.animation_timer.timeout.connect(self.animate_playhead)
-        self.animation_speed = 0.3  # Animation smoothing factor (0.3 = responsive smooth, 1.0 = instant)
+        self.animation_speed = 0.5  # Animation smoothing factor (0.5 = balanced, 1.0 = instant)
+        self.animation_interval = 16  # 60 FPS animation (16ms intervals)
         
         # Waveform data
         self.waveform_data = None
         self.waveform_max_amplitude = 0
         self.video_path = None
+        
+        # Waveform caching for performance optimization
+        self.waveform_cache = WaveformCache(max_zoom_levels=8)  # Reduced cache size
+        self.cache_enabled = True
+        self.cache_during_loading = False  # Disable caching during initial loading
         
         # Zoom functionality - improved limits
         self.zoom_level = 1.0  # 1.0 = normal, 2.0 = 2x zoom, etc.
@@ -2076,6 +2435,11 @@ class TimelineWidget(QWidget):
             self.show_debug_info = not self.show_debug_info
             self.update()
             print(f"Debug info display: {'ON' if self.show_debug_info else 'OFF'}")
+            event.accept()
+            return
+        elif event.key() == Qt.Key_B:
+            # Show buffer statistics
+            self.show_buffer_stats()
             event.accept()
             return
             
@@ -2175,100 +2539,35 @@ class TimelineWidget(QWidget):
             self.selection_changed.emit(self.silent_parts[0])
         
     def load_waveform(self, video_path):
-        """Extract and load waveform data from video"""
+        """Extract and load waveform data from video in background thread"""
         self.video_path = video_path
-        try:
-            print("Extracting waveform data...")
-            
-            # Extract audio using MoviePy
-            import moviepy.editor as mp
-            video = mp.VideoFileClip(video_path)
-            
-            if video.audio is None:
-                print("No audio track found in video")
-                self.waveform_data = None
-                # Still set the duration from video properties
-                if video.duration > 0:
-                    self.set_duration(video.duration)
-                video.close()
-                self.update()
-                return
-                
-            # Get actual audio duration for timeline sync - ensure this matches the video player
-            actual_audio_duration = video.duration
-            print(f"Timeline using actual duration: {actual_audio_duration:.6f}s (high precision)")
-            
-            # Store this for perfect synchronization with video playback
-            self.actual_waveform_duration = actual_audio_duration
-            self.set_duration(actual_audio_duration)
-                
-            # Create temporary audio file
-            import tempfile
-            temp_audio_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            temp_audio_file.close()
-            
-            # Extract audio to temporary file with consistent parameters
-            video.audio.write_audiofile(
-                temp_audio_file.name, 
-                verbose=False, 
-                logger=None,
-                codec='pcm_s16le',  # Ensure consistent audio format
-                ffmpeg_params=['-ar', '44100']  # Ensure consistent sample rate
-            )
-            video.close()
-            
-            # Load audio with pydub
-            from pydub import AudioSegment
-            audio = AudioSegment.from_file(temp_audio_file.name)
-            
-            # Convert to mono for waveform visualization
-            if audio.channels > 1:
-                audio = audio.set_channels(1)
-                
-            # Get raw audio data
-            raw_data = audio.raw_data
-            
-            # Convert to numpy array
-            import struct
-            if audio.sample_width == 1:
-                # 8-bit audio
-                samples = struct.unpack(f'{len(raw_data)}B', raw_data)
-                samples = [(s - 128) / 128.0 for s in samples]  # Convert to -1 to 1 range
-            elif audio.sample_width == 2:
-                # 16-bit audio
-                samples = struct.unpack(f'{len(raw_data)//2}h', raw_data)
-                samples = [s / 32768.0 for s in samples]  # Convert to -1 to 1 range
-            elif audio.sample_width == 4:
-                # 32-bit audio
-                samples = struct.unpack(f'{len(raw_data)//4}i', raw_data)
-                samples = [s / 2147483648.0 for s in samples]  # Convert to -1 to 1 range
-            else:
-                print(f"Unsupported sample width: {audio.sample_width}")
-                samples = []
-            
-            # Downsample for display (we don't need every sample for visualization)
-            # Target about 4000-8000 samples for smooth display
-            target_samples = 6000
-            if len(samples) > target_samples:
-                step = len(samples) // target_samples
-                samples = samples[::step]
-            
-            self.waveform_data = samples
-            self.waveform_max_amplitude = max(abs(s) for s in samples) if samples else 1.0
-            
-            # Clean up temporary file
-            try:
-                os.unlink(temp_audio_file.name)
-            except:
-                pass
-                
-            print(f"Waveform data loaded: {len(samples)} samples, max amplitude: {self.waveform_max_amplitude:.3f}")
-            self.update()  # Trigger repaint
-                
-        except Exception as e:
-            print(f"Error loading waveform: {e}")
-            self.waveform_data = None
-            self.update()
+        
+        # Start waveform loading in background thread
+        self.waveform_thread = WaveformLoadingThread(video_path)
+        self.waveform_thread.waveform_loaded.connect(self.on_waveform_loaded)
+        self.waveform_thread.duration_loaded.connect(self.set_duration)
+        self.waveform_thread.progress_updated.connect(self.on_waveform_progress)
+        self.waveform_thread.start()
+        
+    def on_waveform_loaded(self, waveform_data, max_amplitude):
+        """Handle waveform data when loaded from background thread"""
+        self.waveform_data = waveform_data
+        self.waveform_max_amplitude = max_amplitude
+        if waveform_data:
+            print(f"⚡ Waveform loaded: {len(waveform_data)} samples, max amplitude: {max_amplitude:.3f}")
+        else:
+            print("No audio track found in video")
+        self.update()  # Trigger repaint
+        
+    def on_waveform_progress(self, message):
+        """Handle waveform loading progress updates"""
+        # Find parent SilenceCutterApp to update loading overlay
+        parent = self.parent()
+        while parent and not isinstance(parent, QMainWindow):
+            parent = parent.parent()
+        
+        if parent and hasattr(parent, 'update_loading_progress'):
+            parent.update_loading_progress(message)
     
     def set_duration(self, duration_seconds):
         """Set the total duration of the timeline"""
@@ -2289,7 +2588,7 @@ class TimelineWidget(QWidget):
             
             # Start smooth animation if not already running
             if not self.animation_timer.isActive():
-                self.animation_timer.start(16)  # ~60 FPS animation
+                self.animation_timer.start(self.animation_interval)  # Use configured interval
         
         # Update tooltip to show current time
         if position_seconds >= 0:
@@ -2580,16 +2879,22 @@ class TimelineWidget(QWidget):
             painter.setFont(QFont("Arial", 8, QFont.Bold))
             text_rect = painter.fontMetrics().boundingRect(time_str)
             
-            # Draw time background
-            time_bg_rect = QRectF(pos_x - text_rect.width()/2 - 4, timeline_rect.top() - 35, 
-                                text_rect.width() + 8, text_rect.height() + 4)
-            painter.fillRect(time_bg_rect, QColor(0, 120, 215, 200))
-            painter.setPen(QPen(QColor(0, 80, 160), 1))
+            # Draw time background with full opacity and better styling
+            time_bg_rect = QRectF(pos_x - text_rect.width()/2 - 6, timeline_rect.top() - 38, 
+                                text_rect.width() + 12, text_rect.height() + 8)
+            painter.fillRect(time_bg_rect, QColor(45, 45, 45, 255))  # Fully opaque dark background
+            painter.setPen(QPen(QColor(120, 200, 255), 2))  # Bright blue border
             painter.drawRect(time_bg_rect)
             
-            # Draw time text
+            # Draw inner shadow for depth
+            inner_rect = QRectF(time_bg_rect.x() + 1, time_bg_rect.y() + 1, 
+                              time_bg_rect.width() - 2, time_bg_rect.height() - 2)
+            painter.setPen(QPen(QColor(80, 80, 80), 1))
+            painter.drawRect(inner_rect)
+            
+            # Draw time text with high contrast
             painter.setPen(QPen(QColor(255, 255, 255), 1))
-            painter.drawText(int(pos_x - text_rect.width()/2), int(timeline_rect.top() - 20), time_str)
+            painter.drawText(int(pos_x - text_rect.width()/2), int(timeline_rect.top() - 22), time_str)
             
             # Draw position indicator triangle with gradient
             triangle_points = [
@@ -2606,8 +2911,8 @@ class TimelineWidget(QWidget):
             painter.drawPolygon(triangle_points)
         
         # Draw clean time markers at top like in the reference image
-        painter.setPen(QPen(QColor(200, 200, 200), 1))
-        painter.setFont(QFont("Arial", 9))
+        painter.setPen(QPen(QColor(220, 220, 220), 1))
+        painter.setFont(QFont("Arial", 9, QFont.Bold))
         
         # Calculate appropriate marker interval based on zoom (use original timeline)
         visible_duration = (original_end_time - original_start_time)
@@ -2688,7 +2993,7 @@ class TimelineWidget(QWidget):
             self.reset_button_rect = None
     
     def draw_waveform(self, painter, timeline_rect):
-        """Draw the audio waveform as background with enhanced visibility"""
+        """Draw the audio waveform as background with enhanced visibility and caching"""
         if not self.waveform_data or not self.waveform_max_amplitude:
             # Draw a gradient background if no waveform data
             gradient = QLinearGradient(0, timeline_rect.top(), 0, timeline_rect.bottom())
@@ -2698,11 +3003,11 @@ class TimelineWidget(QWidget):
             painter.fillRect(timeline_rect, QBrush(gradient))
             return
             
-        # Fill background with gradient
+        # Fill background with darker gradient for better contrast
         gradient = QLinearGradient(0, timeline_rect.top(), 0, timeline_rect.bottom())
-        gradient.setColorAt(0, QColor(240, 245, 250))
-        gradient.setColorAt(0.5, QColor(250, 250, 255))
-        gradient.setColorAt(1, QColor(240, 245, 250))
+        gradient.setColorAt(0, QColor(25, 30, 35))
+        gradient.setColorAt(0.5, QColor(30, 35, 40))
+        gradient.setColorAt(1, QColor(25, 30, 35))
         painter.fillRect(timeline_rect, QBrush(gradient))
         
         # ALWAYS use original timeline for waveform display, regardless of preview mode
@@ -2713,6 +3018,17 @@ class TimelineWidget(QWidget):
         waveform_width = timeline_rect.width()
         waveform_height = timeline_rect.height() - 12  # Leave some margin
         waveform_center_y = timeline_rect.center().y()
+        
+        # Try to get cached waveform data first (only if caching is enabled and not during loading)
+        cache_key_params = (self.zoom_level, start_time, end_time)
+        cached_waveform = None
+        if self.cache_enabled and self.cache_during_loading:
+            cached_waveform = self.waveform_cache.get(*cache_key_params)
+        
+        if cached_waveform is not None:
+            # Use cached waveform data
+            self.draw_cached_waveform(painter, timeline_rect, cached_waveform, waveform_center_y, waveform_height)
+            return
         
         # Calculate sample range to display based on ORIGINAL timeline
         total_duration = self.duration_seconds
@@ -2735,7 +3051,10 @@ class TimelineWidget(QWidget):
         # Calculate samples per pixel for the visible range
         samples_per_pixel = len(visible_samples) / waveform_width
         
-        # Draw waveform with enhanced visibility
+        # Prepare waveform data for caching
+        waveform_bars = []
+        
+        # Process waveform with enhanced visibility and detail
         for x in range(int(waveform_width)):
             # Calculate sample index for this pixel
             sample_start = int(x * samples_per_pixel)
@@ -2745,50 +3064,109 @@ class TimelineWidget(QWidget):
             if sample_start >= len(visible_samples):
                 break
                 
-            # Get the RMS (root mean square) and peak for better visualization
+            # Get multiple amplitude measurements for better detail
             if sample_start == sample_end:
                 peak_amplitude = abs(visible_samples[sample_start])
                 rms_amplitude = peak_amplitude
+                avg_amplitude = peak_amplitude
             else:
                 sample_range = visible_samples[sample_start:sample_end]
                 peak_amplitude = max(abs(s) for s in sample_range)
                 rms_amplitude = (sum(s*s for s in sample_range) / len(sample_range)) ** 0.5
+                avg_amplitude = sum(abs(s) for s in sample_range) / len(sample_range)
             
-            # Normalize amplitudes
+            # Normalize amplitudes with better scaling
             peak_normalized = peak_amplitude / self.waveform_max_amplitude if self.waveform_max_amplitude > 0 else 0
             rms_normalized = rms_amplitude / self.waveform_max_amplitude if self.waveform_max_amplitude > 0 else 0
+            avg_normalized = avg_amplitude / self.waveform_max_amplitude if self.waveform_max_amplitude > 0 else 0
             
-            # Calculate bar heights
-            peak_height = peak_normalized * (waveform_height / 2) * 0.9  # 90% of available height
-            rms_height = rms_normalized * (waveform_height / 2) * 0.9
+            # Apply logarithmic scaling for better detail in quiet sections
+            peak_normalized = peak_normalized ** 0.7  # Compress loud parts, expand quiet parts
+            rms_normalized = rms_normalized ** 0.7
+            avg_normalized = avg_normalized ** 0.7
+            
+            # Calculate bar heights with full height usage
+            peak_height = peak_normalized * (waveform_height / 2) * 0.95  # 95% of available height
+            rms_height = rms_normalized * (waveform_height / 2) * 0.95
+            avg_height = avg_normalized * (waveform_height / 2) * 0.95
+            
+            # Store for caching
+            waveform_bars.append((peak_height, rms_height, avg_height))
             
             pixel_x = timeline_rect.left() + x
             
-            # Draw peak waveform (lighter color)
-            if peak_height > 1:
+            # Draw layered waveform for maximum detail and clarity
+            
+            # 1. Draw peak outline (brightest - shows maximum amplitude)
+            if peak_height > 0.5:
                 peak_rect = QRectF(pixel_x, waveform_center_y - peak_height, 1, peak_height * 2)
-                peak_color = QColor(80, 140, 200, 120)
+                peak_color = QColor(120, 200, 255, 200)  # Bright blue
                 painter.fillRect(peak_rect, peak_color)
             
-            # Draw RMS waveform (darker color for better visibility)
-            if rms_height > 0.5:
+            # 2. Draw RMS core (medium brightness - shows energy)
+            if rms_height > 0.3:
                 rms_rect = QRectF(pixel_x, waveform_center_y - rms_height, 1, rms_height * 2)
-                rms_color = QColor(40, 100, 180, 180)
+                rms_color = QColor(80, 160, 220, 220)  # Medium blue
                 painter.fillRect(rms_rect, rms_color)
+            
+            # 3. Draw average core (darkest - shows consistent level)
+            if avg_height > 0.1:
+                avg_rect = QRectF(pixel_x, waveform_center_y - avg_height, 1, avg_height * 2)
+                avg_color = QColor(40, 120, 180, 240)  # Dark blue
+                painter.fillRect(avg_rect, avg_color)
         
-        # Draw enhanced center line
-        painter.setPen(QPen(QColor(120, 120, 120, 150), 1))
+        # Cache the processed waveform data (only if caching is enabled and not during loading)
+        if self.cache_enabled and self.cache_during_loading and waveform_bars:
+            self.waveform_cache.put(*cache_key_params, waveform_bars)
+        
+        # Draw enhanced center line (bright for dark background)
+        painter.setPen(QPen(QColor(200, 200, 200, 180), 1))
         painter.drawLine(int(timeline_rect.left()), int(waveform_center_y), 
                         int(timeline_rect.right()), int(waveform_center_y))
         
-        # Draw subtle grid lines for amplitude reference
-        painter.setPen(QPen(QColor(200, 200, 200, 100), 1))
+        # Draw subtle grid lines for amplitude reference (bright for dark background)
+        painter.setPen(QPen(QColor(100, 100, 100, 120), 1))
         quarter_height = waveform_height / 4
         for i in [1, -1]:  # Draw lines at ±25% and ±50% amplitude
             y1 = waveform_center_y + i * quarter_height
             y2 = waveform_center_y + i * quarter_height * 2
             painter.drawLine(int(timeline_rect.left()), int(y1), int(timeline_rect.right()), int(y1))
             painter.drawLine(int(timeline_rect.left()), int(y2), int(timeline_rect.right()), int(y2))
+    
+    def draw_cached_waveform(self, painter, timeline_rect, waveform_bars, waveform_center_y, waveform_height):
+        """Draw waveform from cached data for improved performance"""
+        for x, bar_data in enumerate(waveform_bars):
+            if x >= timeline_rect.width():
+                break
+                
+            # Handle both old and new cache formats
+            if len(bar_data) == 2:
+                peak_height, rms_height = bar_data
+                avg_height = rms_height * 0.7  # Approximate average
+            else:
+                peak_height, rms_height, avg_height = bar_data
+                
+            pixel_x = timeline_rect.left() + x
+            
+            # Draw layered waveform for maximum detail and clarity
+            
+            # 1. Draw peak outline (brightest)
+            if peak_height > 0.5:
+                peak_rect = QRectF(pixel_x, waveform_center_y - peak_height, 1, peak_height * 2)
+                peak_color = QColor(120, 200, 255, 200)  # Bright blue
+                painter.fillRect(peak_rect, peak_color)
+            
+            # 2. Draw RMS core (medium brightness)
+            if rms_height > 0.3:
+                rms_rect = QRectF(pixel_x, waveform_center_y - rms_height, 1, rms_height * 2)
+                rms_color = QColor(80, 160, 220, 220)  # Medium blue
+                painter.fillRect(rms_rect, rms_color)
+            
+            # 3. Draw average core (darkest)
+            if avg_height > 0.1:
+                avg_rect = QRectF(pixel_x, waveform_center_y - avg_height, 1, avg_height * 2)
+                avg_color = QColor(40, 120, 180, 240)  # Dark blue
+                painter.fillRect(avg_rect, avg_color)
     
     def draw_debug_info(self, painter, timeline_rect):
         """Draw debug information showing click position and playhead position"""
@@ -2889,6 +3267,56 @@ class TimelineWidget(QWidget):
         minutes = int((seconds % 3600) // 60)
         secs = int(seconds % 60)
         return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+        
+    def show_buffer_stats(self):
+        """Show circular buffer performance statistics"""
+        try:
+            # Get stats from parent application
+            parent_app = self.parent()
+            while parent_app and not hasattr(parent_app, 'get_buffer_stats'):
+                parent_app = parent_app.parent()
+                
+            if parent_app and hasattr(parent_app, 'get_buffer_stats'):
+                stats = parent_app.get_buffer_stats()
+                
+                print("\n📊 CIRCULAR BUFFER PERFORMANCE STATS 📊")
+                print("=" * 50)
+                
+                # Frame buffer stats
+                if 'frame_buffer' in stats:
+                    fb_stats = stats['frame_buffer']
+                    print(f"🎬 Frame Buffer:")
+                    print(f"   Cache Hit Rate: {fb_stats['hit_rate']:.1f}%")
+                    print(f"   Hits: {fb_stats['hits']}, Misses: {fb_stats['misses']}")
+                    print(f"   Buffer Size: {fb_stats['size']}/{fb_stats['max_size']}")
+                    
+                # Waveform cache stats
+                if 'waveform_cache' in stats:
+                    wc_stats = stats['waveform_cache']
+                    print(f"🌊 Waveform Cache:")
+                    print(f"   Cached Zoom Levels: {wc_stats['size']}/{wc_stats['max_size']}")
+                    
+                # Cache status
+                cache_status = "✅ ENABLED" if self.cache_enabled else "❌ DISABLED"
+                print(f"💾 Waveform Caching: {cache_status}")
+                
+                print("=" * 50)
+                print("Press 'B' again to refresh stats")
+                
+            else:
+                print("📊 Buffer stats not available")
+                
+        except Exception as e:
+            print(f"Error showing buffer stats: {e}")
+            
+    def enable_caching(self):
+        """Enable waveform caching after initial loading"""
+        self.cache_during_loading = True
+        print("💾 Waveform caching enabled")
+        
+    def disable_caching(self):
+        """Disable waveform caching during heavy operations"""
+        self.cache_during_loading = False
         
     def mousePressEvent(self, event):
         if event.button() != Qt.LeftButton or self.duration_seconds <= 0:
@@ -3239,10 +3667,21 @@ class InteractiveVideoPlayer(QWidget):
         self.video_path = video_path
         print(f"Loading video into player: {video_path}")
         
+        # Update loading progress
+        parent = self.parent()
+        while parent and not isinstance(parent, QMainWindow):
+            parent = parent.parent()
+        if parent and hasattr(parent, 'update_loading_progress'):
+            parent.update_loading_progress("Setting up video player...")
+        
         if os.path.exists(video_path):
             # Convert path to proper format for QMediaPlayer
             abs_path = os.path.abspath(video_path)
             print(f"Absolute path: {abs_path}")
+            
+            # Update loading progress
+            if parent and hasattr(parent, 'update_loading_progress'):
+                parent.update_loading_progress("Loading timeline waveform...")
             
             # Load waveform data for timeline visualization
             self.timeline_widget.load_waveform(video_path)
@@ -3267,8 +3706,12 @@ class InteractiveVideoPlayer(QWidget):
             self.media_player.setPosition(1000)  # Seek to 1 second to load a frame
             self.media_player.setPosition(0)     # Go back to start
             
+            # Update loading progress
+            if parent and hasattr(parent, 'update_loading_progress'):
+                parent.update_loading_progress("Initializing media player...")
+            
             # Set up a timer to check if media loaded successfully after a short delay
-            QTimer.singleShot(2000, self.check_media_loaded)
+            QTimer.singleShot(1500, self.check_media_loaded)  # Reduced from 2000ms
             
         else:
             print(f"Video file does not exist: {video_path}")
@@ -3277,11 +3720,21 @@ class InteractiveVideoPlayer(QWidget):
     def check_media_loaded(self):
         """Check if media loaded successfully, if not, show a fallback message"""
         status = self.media_player.mediaStatus()
+        
+        # Find parent to hide loading overlay
+        parent = self.parent()
+        while parent and not isinstance(parent, QMainWindow):
+            parent = parent.parent()
+            
         if status == QMediaPlayer.InvalidMedia or status == QMediaPlayer.NoMedia:
             print("QMediaPlayer failed to load video, setting up fallback display")
+            if parent and hasattr(parent, 'update_loading_progress'):
+                parent.update_loading_progress("Setting up enhanced video player...")
             self.setup_fallback_video_display()
         elif status == QMediaPlayer.LoadedMedia:
             print("QMediaPlayer loaded successfully")
+            if parent and hasattr(parent, 'hide_loading_overlay'):
+                parent.hide_loading_overlay()
             
     def setup_fallback_video_display(self):
         """Set up a multi-threaded fallback video display when QMediaPlayer fails"""
@@ -3366,6 +3819,13 @@ class InteractiveVideoPlayer(QWidget):
                 
                 # Seek to first frame to show something
                 self.video_thread.seek(0)
+                
+                # Hide loading overlay
+                parent = self.parent()
+                while parent and not isinstance(parent, QMainWindow):
+                    parent = parent.parent()
+                if parent and hasattr(parent, 'hide_loading_overlay'):
+                    parent.hide_loading_overlay()
                 
                 # Show success message
                 self.show_video_message("✓ Multi-threaded video loaded!\n\nFast video playback ready. Click Play to start.\n• Audio preview available!\n• Perfect audio-timeline sync!")
@@ -4083,12 +4543,134 @@ class InteractiveVideoPlayer(QWidget):
         # Update time label immediately
         self.update_time_label_display()
 
+class LoadingOverlay(QWidget):
+    """Beautiful loading overlay with animated spinner"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        if parent:
+            self.setFixedSize(parent.size())
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 180);")
+        
+        # Animation properties
+        self.angle = 0
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.rotate)
+        
+        # Setup UI
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        layout.setAlignment(Qt.AlignCenter)
+        
+        # Main container
+        container = QWidget()
+        container.setFixedSize(300, 200)
+        container.setStyleSheet("""
+            QWidget {
+                background-color: rgba(45, 45, 45, 240);
+                border-radius: 20px;
+                border: 2px solid #3498db;
+            }
+        """)
+        
+        container_layout = QVBoxLayout(container)
+        container_layout.setAlignment(Qt.AlignCenter)
+        container_layout.setSpacing(20)
+        
+        # Loading text
+        self.loading_label = QLabel("Loading Video...")
+        self.loading_label.setStyleSheet("""
+            QLabel {
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+        """)
+        self.loading_label.setAlignment(Qt.AlignCenter)
+        
+        # Progress text
+        self.progress_label = QLabel("Preparing timeline...")
+        self.progress_label.setStyleSheet("""
+            QLabel {
+                color: #bdc3c7;
+                font-size: 12px;
+                background: transparent;
+                border: none;
+            }
+        """)
+        self.progress_label.setAlignment(Qt.AlignCenter)
+        
+        container_layout.addWidget(self.loading_label)
+        container_layout.addWidget(self.progress_label)
+        
+        layout.addWidget(container)
+        self.setLayout(layout)
+        
+    def show_loading(self, message="Loading Video..."):
+        """Show loading overlay with message"""
+        self.loading_label.setText(message)
+        self.progress_label.setText("Preparing timeline...")
+        self.show()
+        self.raise_()
+        self.timer.start(50)  # 20 FPS animation
+        
+    def update_progress(self, message):
+        """Update progress message"""
+        self.progress_label.setText(message)
+        
+    def hide_loading(self):
+        """Hide loading overlay"""
+        self.timer.stop()
+        self.hide()
+        
+    def rotate(self):
+        """Animate the loading indicator"""
+        self.angle = (self.angle + 10) % 360
+        self.update()
+        
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        
+        # Draw animated spinner
+        center = self.rect().center()
+        radius = 30
+        
+        # Draw spinning circle
+        painter.setPen(QPen(QColor(52, 152, 219), 4))
+        rect = QRectF(center.x() - radius, center.y() - radius - 50, radius * 2, radius * 2)
+        
+        # Draw arc that rotates
+        painter.drawArc(rect, self.angle * 16, 120 * 16)  # 120 degree arc
+        
+        # Draw dots around the circle
+        import math
+        for i in range(8):
+            angle = (self.angle + i * 45) * 3.14159 / 180
+            x = center.x() + (radius + 10) * math.cos(angle)
+            y = center.y() - 50 + (radius + 10) * math.sin(angle)
+            
+            # Fade effect for dots
+            alpha = int(255 * (1 - i / 8))
+            painter.setBrush(QBrush(QColor(52, 152, 219, alpha)))
+            painter.setPen(Qt.NoPen)
+            painter.drawEllipse(QPointF(x, y), 3, 3)
+
 class SilenceCutterApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.video_path = None
         self.silent_parts = []
         self.silent_ranges = []
+        
+        # Create loading overlay
+        self.loading_overlay = None
+        
         self.setup_ui()
         
     def setup_ui(self):
@@ -4245,15 +4827,31 @@ class SilenceCutterApp(QMainWindow):
         )
         
         if file_path:
+            # Show loading overlay immediately
+            self.show_loading_overlay("Loading Video...")
+            
+            # Clear previous data first
+            self.clear_previous_data()
+            
             self.video_path = file_path
             file_name = os.path.basename(file_path)
             self.file_label.setText(file_name)
             self.detect_btn.setEnabled(True)
-            # Clear previous results
             self.silent_parts = []
             self.process_btn.setEnabled(False)
+            
+            # Update loading message
+            self.update_loading_progress("Initializing video player...")
+            
             # Load video into the player
             self.video_player.load_video(file_path)
+            
+            # Enable performance optimizations immediately
+            self.enable_performance_optimizations()
+            
+            # Loading will be hidden automatically when video player finishes loading
+            # Fallback timer in case something goes wrong
+            QTimer.singleShot(3000, self.hide_loading_overlay)
     
     def detect_silence(self):
         if not self.video_path:
@@ -4268,6 +4866,9 @@ class SilenceCutterApp(QMainWindow):
         self.detect_btn.setEnabled(False)
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)
+        
+        # Disable performance optimizations during detection for faster processing
+        self.disable_performance_optimizations()
         
         # Start the detection thread
         self.detection_thread = SilenceDetectionThread(
@@ -4286,6 +4887,9 @@ class SilenceCutterApp(QMainWindow):
     def show_detection_results(self, silent_parts):
         self.progress_bar.setVisible(False)
         self.detect_btn.setEnabled(True)
+        
+        # Re-enable performance optimizations after detection
+        self.enable_performance_optimizations()
         
         print(f"\n---------- SILENCE DETECTION RESULTS ----------")
         print(f"Number of silent parts detected: {len(silent_parts)}")
@@ -4391,10 +4995,189 @@ class SilenceCutterApp(QMainWindow):
     
     def closeEvent(self, event):
         """Handle application close event"""
-        # Clean up video player resources
-        if hasattr(self, 'video_player'):
-            self.video_player.cleanup_fallback_resources()
+        try:
+            # Stop any ongoing detection or processing
+            if hasattr(self, 'detection_thread') and self.detection_thread.isRunning():
+                self.detection_thread.terminate()
+                self.detection_thread.wait(1000)
+            
+            if hasattr(self, 'processing_thread') and self.processing_thread.isRunning():
+                self.processing_thread.terminate()
+                self.processing_thread.wait(1000)
+            
+            # Clean up video player resources
+            if hasattr(self, 'video_player'):
+                self.video_player.cleanup_fallback_resources()
+                
+            # Clean up circular buffers and caches
+            self.cleanup_buffers()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+        
         super().closeEvent(event)
+        
+    def cleanup_buffers(self):
+        """Clean up all circular buffers and caches"""
+        try:
+            # Clear video playback thread buffers
+            if hasattr(self.video_player, 'video_thread') and self.video_player.video_thread:
+                if hasattr(self.video_player.video_thread, 'frame_buffer'):
+                    self.video_player.video_thread.frame_buffer.clear()
+                if hasattr(self.video_player.video_thread, 'audio_buffer'):
+                    self.video_player.video_thread.audio_buffer.clear()
+                    
+            # Clear timeline waveform cache
+            if hasattr(self.video_player, 'timeline') and hasattr(self.video_player.timeline, 'waveform_cache'):
+                self.video_player.timeline.waveform_cache.clear()
+                
+            print("🧹 Circular buffers and caches cleared")
+        except Exception as e:
+            print(f"Error cleaning up buffers: {e}")
+            
+    def get_buffer_stats(self):
+        """Get performance statistics from circular buffers"""
+        stats = {}
+        try:
+            # Video frame buffer stats
+            if (hasattr(self.video_player, 'video_thread') and 
+                self.video_player.video_thread and 
+                hasattr(self.video_player.video_thread, 'frame_buffer')):
+                stats['frame_buffer'] = self.video_player.video_thread.frame_buffer.get_cache_stats()
+                
+            # Waveform cache stats
+            if (hasattr(self.video_player, 'timeline') and 
+                hasattr(self.video_player.timeline, 'waveform_cache')):
+                waveform_cache = self.video_player.timeline.waveform_cache
+                stats['waveform_cache'] = {
+                    'size': len(waveform_cache.cache),
+                    'max_size': waveform_cache.max_levels
+                }
+                
+            return stats
+        except Exception as e:
+            print(f"Error getting buffer stats: {e}")
+            return {}
+            
+    def enable_performance_optimizations(self):
+        """Enable performance optimizations after initial loading is complete"""
+        try:
+            # Enable buffer operations
+            if hasattr(self.video_player, 'video_thread') and self.video_player.video_thread:
+                self.video_player.video_thread.set_buffer_mode(True)
+                
+            # Enable waveform caching
+            if hasattr(self.video_player, 'timeline'):
+                self.video_player.timeline.enable_caching()
+                
+            print("⚡ Performance optimizations enabled")
+        except Exception as e:
+            print(f"Error enabling optimizations: {e}")
+            
+    def disable_performance_optimizations(self):
+        """Disable performance optimizations during heavy operations"""
+        try:
+            # Disable all buffer operations
+            if hasattr(self.video_player, 'video_thread') and self.video_player.video_thread:
+                self.video_player.video_thread.set_buffer_mode(False)
+                
+            # Disable waveform caching
+            if hasattr(self.video_player, 'timeline'):
+                self.video_player.timeline.disable_caching()
+                
+            print("🔄 Performance optimizations disabled for heavy operation")
+        except Exception as e:
+            print(f"Error disabling optimizations: {e}")
+            
+    def clear_previous_data(self):
+        """Clear all previous video data and UI elements completely"""
+        try:
+            print("🧹 Clearing all previous video data...")
+            
+            # Clear silent parts data
+            self.silent_parts = []
+            
+            # Stop any running threads
+            if hasattr(self, 'detection_thread') and self.detection_thread and self.detection_thread.isRunning():
+                self.detection_thread.terminate()
+                self.detection_thread.wait(1000)
+                
+            if hasattr(self, 'processing_thread') and self.processing_thread and self.processing_thread.isRunning():
+                self.processing_thread.terminate()
+                self.processing_thread.wait(1000)
+            
+            # Clear timeline data completely
+            if hasattr(self.video_player, 'timeline'):
+                timeline = self.video_player.timeline
+                
+                # Stop any waveform loading thread
+                if hasattr(timeline, 'waveform_thread') and timeline.waveform_thread and timeline.waveform_thread.isRunning():
+                    timeline.waveform_thread.terminate()
+                    timeline.waveform_thread.wait(1000)
+                
+                # Clear all timeline data
+                timeline.set_silent_parts([], [])
+                timeline.set_duration(0)
+                timeline.set_position(0, instant=True)
+                timeline.waveform_data = None
+                timeline.waveform_max_amplitude = 0
+                timeline.video_path = None
+                timeline.preview_mode = False
+                timeline.zoom_level = 1.0
+                timeline.zoom_offset = 0.0
+                timeline.current_position = 0
+                timeline.target_position = 0
+                
+                # Clear caches
+                timeline.waveform_cache.clear()
+                if hasattr(timeline, 'history'):
+                    timeline.history = []
+                    timeline.history_index = -1
+                
+                # Force update
+                timeline.update()
+                
+            # Clear video player data
+            if hasattr(self.video_player, 'video_thread') and self.video_player.video_thread:
+                self.video_player.video_thread.frame_buffer.clear()
+                self.video_player.video_thread.audio_buffer.clear()
+                self.video_player.video_thread.stop_playback()
+                
+            # Reset UI elements
+            self.progress_bar.setValue(0)
+            self.progress_bar.setVisible(False)
+            self.detect_btn.setEnabled(False)
+            self.process_btn.setEnabled(False)
+            self.file_label.setText("No file selected")
+            
+            print("✅ All previous data cleared successfully")
+        except Exception as e:
+            print(f"Error clearing previous data: {e}")
+    
+    def show_loading_overlay(self, message="Loading..."):
+        """Show beautiful loading overlay"""
+        if not self.loading_overlay:
+            self.loading_overlay = LoadingOverlay(self)
+            self.loading_overlay.setFixedSize(self.size())
+        
+        self.loading_overlay.show_loading(message)
+        QApplication.processEvents()  # Ensure UI updates immediately
+        
+    def update_loading_progress(self, message):
+        """Update loading progress message"""
+        if self.loading_overlay:
+            self.loading_overlay.update_progress(message)
+            QApplication.processEvents()
+            
+    def hide_loading_overlay(self):
+        """Hide loading overlay"""
+        if self.loading_overlay:
+            self.loading_overlay.hide_loading()
+    
+    def resizeEvent(self, event):
+        """Handle window resize to update loading overlay size"""
+        super().resizeEvent(event)
+        if self.loading_overlay:
+            self.loading_overlay.setFixedSize(self.size())
 
 # Clean up any temporary files on exit
 def cleanup_temp_files():
