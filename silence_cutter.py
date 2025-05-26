@@ -2604,6 +2604,25 @@ class TimelineWidget(QWidget):
         self.zoom_level = 1.0
         self.zoom_offset = 0.0
         self.update()
+    
+    def handle_resize(self):
+        """Handle timeline widget resize - clear cache and force redraw for proper waveform scaling"""
+        if hasattr(self, 'waveform_cache'):
+            self.waveform_cache.clear()
+            print("  🌊 Timeline waveform cache cleared for resize")
+        
+        # Force immediate update to redraw waveform with new dimensions
+        self.update()
+    
+    def resizeEvent(self, event):
+        """Handle resize events for the timeline widget"""
+        super().resizeEvent(event)
+        
+        # Clear waveform cache when timeline widget is resized to ensure proper scaling
+        if hasattr(self, 'waveform_cache') and self.waveform_data:
+            self.waveform_cache.clear()
+            # Small delay to allow layout to settle before redrawing
+            QTimer.singleShot(50, self.update)
         
     def save_state(self):
         """Save current state for undo/redo"""
@@ -4742,6 +4761,15 @@ class InteractiveVideoPlayer(QWidget):
                 if size_diff > 5:  # Only resize if difference is more than 5 pixels total
                     print(f"  🔄 Updating video label fixed size: {current_size} → {new_size}")
                     self.video_frame_label.setFixedSize(new_size)
+                    
+                    # If there's a current frame, rescale it to fit the new container size
+                    if hasattr(self.video_frame_label, 'pixmap') and self.video_frame_label.pixmap():
+                        current_pixmap = self.video_frame_label.pixmap()
+                        if current_pixmap and not current_pixmap.isNull():
+                            # Scale pixmap to fit new container size while maintaining aspect ratio
+                            scaled_pixmap = current_pixmap.scaled(new_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            self.video_frame_label.setPixmap(scaled_pixmap)
+                            print(f"  🖼️  Rescaled current frame to fit new container: {scaled_pixmap.size()}")
                 else:
                     print(f"  ⏭️  Skipping micro-resize (diff: {size_diff}px)")
         
@@ -6149,15 +6177,12 @@ class SilenceCutterApp(QMainWindow):
         
         print(f"✅ Detection completed! Found {len(silent_parts)} silent regions")
         
-        # Show results message
+        # Log results to console (no popup)
         total_silence_duration = sum(part['end'] - part['start'] for part in silent_parts)
-        QMessageBox.information(
-            self, 
-            "Detection Complete", 
-            f"Found {len(silent_parts)} silent regions.\n"
-            f"Total silence duration: {total_silence_duration:.1f} seconds\n\n"
-            f"Click on timeline regions to select/deselect them for processing."
-        )
+        print(f"📊 Detection Results:")
+        print(f"  • Found {len(silent_parts)} silent regions")
+        print(f"  • Total silence duration: {total_silence_duration:.1f} seconds")
+        print(f"  • Click on timeline regions to select/deselect them for processing")
     
     def on_video_player_selection_changed(self, changed_part):
         """Handle selection changes from the video player"""
@@ -6483,13 +6508,24 @@ class SilenceCutterApp(QMainWindow):
             self.loading_overlay.resize(self.size())
         
         # Handle fullscreen video sizing
-        if self.is_fullscreen and hasattr(self, 'video_timeline_splitter'):
-            video_player = self.video_timeline_splitter.widget(0)
-            if video_player and hasattr(video_player, 'video_frame_label'):
-                print(f"  🖥️  Fullscreen video resize: {self.size()}")
-                # In fullscreen, make sure video frame label fills the entire window using fixed size
-                video_player.video_frame_label.setFixedSize(self.size())
-                video_player.video_frame_label.repaint()
+        if self.is_fullscreen and hasattr(self, 'video_player') and hasattr(self.video_player, 'video_frame_label'):
+            video_frame_label = self.video_player.video_frame_label
+            print(f"  🖥️  Fullscreen video resize: {self.size()}")
+            
+            # In fullscreen, make sure video frame label fills the entire window
+            fullscreen_size = self.size()
+            video_frame_label.setFixedSize(fullscreen_size)
+            video_frame_label.setGeometry(0, 0, fullscreen_size.width(), fullscreen_size.height())
+            
+            # If there's a current frame, rescale it to new fullscreen size
+            if hasattr(video_frame_label, 'pixmap') and video_frame_label.pixmap():
+                current_pixmap = video_frame_label.pixmap()
+                if current_pixmap:
+                    fullscreen_pixmap = current_pixmap.scaled(fullscreen_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    video_frame_label.setPixmap(fullscreen_pixmap)
+                    print(f"  🖼️  Rescaled frame for fullscreen resize: {fullscreen_pixmap.size()}")
+            
+            video_frame_label.repaint()
         
         # DEBUG: Log video container size after resize
         if hasattr(self, 'video_player') and hasattr(self.video_player, 'video_frame_label'):
@@ -6504,6 +6540,34 @@ class SilenceCutterApp(QMainWindow):
         # Position fullscreen button in lower right corner of video container
         if hasattr(self, 'fullscreen_btn') and hasattr(self, 'video_player'):
             QTimer.singleShot(10, self.position_fullscreen_button)  # Delay to ensure layout is updated
+        
+        # Reset timeline zoom when window is resized to ensure complete waveform is visible
+        if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
+            timeline = self.video_player.timeline_widget
+            
+            # Only reset zoom if the window size change is significant (e.g., maximizing)
+            if event.oldSize().isValid():
+                old_area = event.oldSize().width() * event.oldSize().height()
+                new_area = event.size().width() * event.size().height()
+                area_change_ratio = new_area / old_area if old_area > 0 else 1.0
+                
+                # If window area changed by more than 30%, reset timeline zoom and clear cache for proper waveform fitting
+                if area_change_ratio > 1.3 or area_change_ratio < 0.77:
+                    print(f"  📊 Significant window resize detected (area change: {area_change_ratio:.2f}x), resetting timeline zoom and clearing cache")
+                    
+                    # Clear waveform cache to force complete redraw with new dimensions
+                    if hasattr(timeline, 'waveform_cache'):
+                        timeline.waveform_cache.clear()
+                        print("  🧹 Waveform cache cleared for proper scaling")
+                    
+                    # Reset zoom to show complete waveform
+                    timeline.reset_zoom()
+                    
+                    # Handle resize to clear cache and force proper redraw
+                    timeline.handle_resize()
+                    
+                    # Additional update after a short delay to ensure proper layout
+                    QTimer.singleShot(100, timeline.update)
     
     def position_fullscreen_button(self):
         """Position the fullscreen button in the lower right corner of the video section"""
@@ -6738,48 +6802,77 @@ class SilenceCutterApp(QMainWindow):
     
     def toggle_fullscreen(self):
         """Toggle fullscreen mode for the video player"""
+        print(f"🖥️  FULLSCREEN TOGGLE DEBUG:")
+        print(f"  📊 Current fullscreen state: {self.is_fullscreen}")
+        print(f"  📏 Current window size: {self.size()}")
+        print(f"  📐 Current window geometry: {self.geometry()}")
+        
         if not self.is_fullscreen:
             # Enter fullscreen
+            print(f"  ▶️  Entering fullscreen mode...")
             self.is_fullscreen = True
             self.original_geometry = self.geometry()
             self.original_window_state = self.windowState()
+            
+            print(f"  💾 Saved original geometry: {self.original_geometry}")
+            print(f"  💾 Saved original window state: {self.original_window_state}")
             
             # Hide all UI elements except video
             self.hide_ui_for_fullscreen()
             
             # Make the main window fullscreen
+            print(f"  🖥️  Setting window to fullscreen...")
             self.setWindowState(Qt.WindowFullScreen)
+            
+            # Force update and check new size
+            QApplication.processEvents()
+            print(f"  📏 New fullscreen size: {self.size()}")
+            print(f"  📐 New fullscreen geometry: {self.geometry()}")
             
             # Update fullscreen button text
             self.fullscreen_btn.setText("⛶")
             self.fullscreen_btn.setToolTip("Exit Fullscreen (ESC)")
             
         else:
+            print(f"  ⏹️  Exiting fullscreen mode...")
             self.exit_fullscreen()
+        
+        print()
     
     def exit_fullscreen(self):
         """Exit fullscreen mode"""
+        print(f"  🚪 EXITING FULLSCREEN:")
         if self.is_fullscreen:
+            print(f"    📊 Setting fullscreen state to False")
             self.is_fullscreen = False
             
             # Restore window state
+            print(f"    🪟 Restoring window state: {self.original_window_state}")
             self.setWindowState(self.original_window_state)
             
             # Show all UI elements
+            print(f"    👁️  Showing UI after fullscreen...")
             self.show_ui_after_fullscreen()
             
             # Update fullscreen button text
             self.fullscreen_btn.setText("⛶")
             self.fullscreen_btn.setToolTip("Toggle Fullscreen (F11)")
+            
+            print(f"    ✅ Fullscreen exit complete")
+        else:
+            print(f"    ⚠️  Not in fullscreen mode, nothing to exit")
     
     def hide_ui_for_fullscreen(self):
         """Hide UI elements for fullscreen mode"""
+        print(f"  🫥 HIDING UI FOR FULLSCREEN:")
+        
         # Store references to hidden widgets
         self.hidden_widgets = []
         
         # Find and hide the main content layout children except video splitter
         main_widget = self.centralWidget()
         if main_widget and main_widget.layout():
+            print(f"    📦 Found main widget with layout")
             main_layout = main_widget.layout()
             for i in range(main_layout.count()):
                 item = main_layout.itemAt(i)
@@ -6787,12 +6880,14 @@ class SilenceCutterApp(QMainWindow):
                     if item.layout():
                         # This is the header layout - hide all its widgets
                         header_layout = item.layout()
+                        print(f"    🎯 Hiding header layout widgets...")
                         for j in range(header_layout.count()):
                             header_item = header_layout.itemAt(j)
                             if header_item and header_item.widget():
                                 widget = header_item.widget()
                                 widget.hide()
                                 self.hidden_widgets.append(widget)
+                                print(f"      🫥 Hidden widget: {widget.__class__.__name__}")
                             elif header_item and header_item.layout():
                                 # Hide widgets in nested layouts (like title layout)
                                 nested_layout = header_item.layout()
@@ -6802,6 +6897,7 @@ class SilenceCutterApp(QMainWindow):
                                         widget = nested_item.widget()
                                         widget.hide()
                                         self.hidden_widgets.append(widget)
+                                        print(f"      🫥 Hidden nested widget: {widget.__class__.__name__}")
                     elif item.layout() and hasattr(self, 'video_timeline_splitter'):
                         # This is the content layout - hide the sidebar
                         content_layout = item.layout()
@@ -6812,65 +6908,162 @@ class SilenceCutterApp(QMainWindow):
                                 left_panel = left_panel_item.widget()
                                 left_panel.hide()
                                 self.hidden_widgets.append(left_panel)
+                                print(f"      🫥 Hidden sidebar: {left_panel.__class__.__name__}")
         
         # Hide the timeline section from the splitter
         if hasattr(self, 'video_timeline_splitter'):
+            print(f"    📺 Processing video timeline splitter...")
+            print(f"      🔢 Splitter widget count: {self.video_timeline_splitter.count()}")
+            
             # Hide timeline (second widget in splitter)
             if self.video_timeline_splitter.count() > 1:
                 timeline_widget = self.video_timeline_splitter.widget(1)
                 if timeline_widget:
                     timeline_widget.hide()
                     self.hidden_widgets.append(timeline_widget)
+                    print(f"      🫥 Hidden timeline widget: {timeline_widget.__class__.__name__}")
             
             # Make the video section take full space
+            print(f"      📏 Setting splitter sizes to [1, 0]...")
             self.video_timeline_splitter.setSizes([1, 0])
             
             # Ensure video frame label is visible and properly sized for fullscreen
-            video_player = self.video_timeline_splitter.widget(0)
-            if video_player and hasattr(video_player, 'video_frame_label'):
-                video_player.video_frame_label.show()
+            video_section = self.video_timeline_splitter.widget(0)  # This is the QFrame containing video
+            if video_section:
+                print(f"      🎬 Found video section: {video_section.__class__.__name__}")
                 
-                # CRITICAL FIX: Keep Fixed size policy even in fullscreen to prevent auto-resizing
-                # Set the video frame label to fullscreen size but maintain Fixed policy
-                fullscreen_size = self.size()
-                video_player.video_frame_label.setFixedSize(fullscreen_size)
-                print(f"🖥️  Setting fullscreen video size: {fullscreen_size}")
-                
-                # Force update the layout to ensure proper sizing
-                video_player.layout().update()
-                QApplication.processEvents()
-                
-                # Ensure the video frame label gets the focus and is properly displayed
-                video_player.video_frame_label.raise_()
-                video_player.video_frame_label.repaint()
+                # The actual video player is self.video_player, which contains the video_frame_label
+                if hasattr(self, 'video_player') and hasattr(self.video_player, 'video_frame_label'):
+                    video_frame_label = self.video_player.video_frame_label
+                    print(f"        🎬 Found video frame label in self.video_player")
+                    print(f"        📏 Video section size: {video_section.size()}")
+                    print(f"        🏷️  Video frame label size before: {video_frame_label.size()}")
+                    print(f"        👁️  Video frame label visible: {video_frame_label.isVisible()}")
+                    
+                    video_frame_label.show()
+                    
+                    # CRITICAL FIX: For fullscreen, temporarily change to Expanding policy to fill screen
+                    # Then immediately set fixed size to prevent auto-resizing during playback
+                    fullscreen_size = self.size()
+                    print(f"        🖥️  Setting fullscreen video size: {fullscreen_size}")
+                    
+                    # Step 1: Temporarily set expanding policy to fill the screen
+                    video_frame_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                    
+                    # Step 2: Set geometry to fill entire window (relative to main window, not parent)
+                    video_frame_label.setParent(self)  # Temporarily reparent to main window for fullscreen
+                    video_frame_label.setGeometry(0, 0, fullscreen_size.width(), fullscreen_size.height())
+                    
+                    # Step 3: Force layout update
+                    QApplication.processEvents()
+                    
+                    # Step 4: Now set back to Fixed policy with the fullscreen size to prevent auto-resizing
+                    video_frame_label.setFixedSize(fullscreen_size)
+                    video_frame_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                    
+                    print(f"        🏷️  Video frame label size after: {video_frame_label.size()}")
+                    print(f"        📐 Video frame label geometry: {video_frame_label.geometry()}")
+                    
+                    # Step 5: Ensure the video frame label is visible and on top
+                    video_frame_label.show()
+                    video_frame_label.raise_()
+                    video_frame_label.repaint()
+                    
+                    # Step 6: If there's a current frame, redisplay it at fullscreen size
+                    if hasattr(video_frame_label, 'pixmap') and video_frame_label.pixmap():
+                        current_pixmap = video_frame_label.pixmap()
+                        if current_pixmap:
+                            # Scale the current frame to fullscreen size
+                            fullscreen_pixmap = current_pixmap.scaled(fullscreen_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            video_frame_label.setPixmap(fullscreen_pixmap)
+                            print(f"        🖼️  Rescaled current frame to fullscreen: {fullscreen_pixmap.size()}")
+                    
+                    print(f"        ✅ Video frame label configured for fullscreen")
+                else:
+                    print(f"      ❌ No video_player.video_frame_label found!")
+            else:
+                print(f"      ❌ No video section found!")
+        else:
+            print(f"    ❌ No video timeline splitter found!")
     
     def show_ui_after_fullscreen(self):
         """Show UI elements after exiting fullscreen"""
+        print(f"  🪟 RESTORING UI AFTER FULLSCREEN:")
+        
         # Show all previously hidden widgets
         if hasattr(self, 'hidden_widgets'):
+            print(f"    👁️  Showing {len(self.hidden_widgets)} hidden widgets...")
             for widget in self.hidden_widgets:
                 widget.show()
+                print(f"      👁️  Showed widget: {widget.__class__.__name__}")
             delattr(self, 'hidden_widgets')
         
         # Restore the splitter sizes to normal
         if hasattr(self, 'video_timeline_splitter'):
+            print(f"    📏 Restoring splitter sizes...")
             # Restore 60% video, 40% timeline split
             total_height = self.video_timeline_splitter.height()
             video_height = int(total_height * 0.6)
             timeline_height = total_height - video_height
             self.video_timeline_splitter.setSizes([video_height, timeline_height])
+            print(f"      📏 Set splitter sizes: video={video_height}, timeline={timeline_height}")
             
-            # CRITICAL FIX: Restore video frame label size to normal windowed size
-            video_player = self.video_timeline_splitter.widget(0)
-            if video_player and hasattr(video_player, 'video_frame_label'):
-                # Get the current video player size and set the label to match
-                windowed_size = video_player.size()
-                video_player.video_frame_label.setFixedSize(windowed_size)
-                print(f"🪟 Restored video label size to windowed: {windowed_size}")
+            # CRITICAL FIX: Restore video frame label size and policy to normal windowed mode
+            if hasattr(self, 'video_player') and hasattr(self.video_player, 'video_frame_label'):
+                video_frame_label = self.video_player.video_frame_label
+                print(f"    🎬 Restoring video frame label...")
                 
-                # Force layout update
-                video_player.layout().update()
+                # Step 1: Wait for layout to settle
                 QApplication.processEvents()
+                
+                # Step 2: Restore the video frame label to its original parent (video_player)
+                video_frame_label.setParent(self.video_player)
+                print(f"      🔄 Reparented video frame label back to video_player")
+                
+                # Step 3: Wait for reparenting to complete
+                QApplication.processEvents()
+                
+                # Step 4: Get the current video player size after splitter resize
+                windowed_size = self.video_player.size()
+                print(f"      📏 Video player windowed size: {windowed_size}")
+                
+                # Step 5: Restore the original size policy (Fixed to prevent auto-resizing)
+                video_frame_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                
+                # Step 6: Set the label to match the video player size and position it correctly
+                video_frame_label.setFixedSize(windowed_size)
+                video_frame_label.setGeometry(0, 0, windowed_size.width(), windowed_size.height())
+                print(f"      🏷️  Set video label size to: {windowed_size}")
+                print(f"      📐 Set video label geometry to: {video_frame_label.geometry()}")
+                
+                # Step 7: Ensure the video frame label is visible and on top
+                video_frame_label.show()
+                video_frame_label.raise_()
+                
+                # Step 8: Force layout update
+                if hasattr(self.video_player, 'layout') and self.video_player.layout():
+                    self.video_player.layout().update()
+                QApplication.processEvents()
+                
+                # Step 9: If there's a current frame, rescale it to windowed size
+                if hasattr(video_frame_label, 'pixmap') and video_frame_label.pixmap():
+                    current_pixmap = video_frame_label.pixmap()
+                    if current_pixmap:
+                        # Scale the current frame to windowed size
+                        windowed_pixmap = current_pixmap.scaled(windowed_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                        video_frame_label.setPixmap(windowed_pixmap)
+                        print(f"      🖼️  Rescaled current frame to windowed: {windowed_pixmap.size()}")
+                
+                # Step 10: Final repaint
+                video_frame_label.repaint()
+                
+                print(f"      ✅ Video frame label restored to windowed mode")
+            else:
+                print(f"    ❌ No video_player.video_frame_label found for restoration!")
+        else:
+            print(f"    ❌ No video timeline splitter found for restoration!")
+        
+        print(f"  ✅ UI restoration complete")
     
     def keyPressEvent(self, event):
         """Handle keyboard shortcuts"""
