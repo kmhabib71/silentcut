@@ -823,25 +823,26 @@ class VideoPlaybackThread(QThread):
             return None
             
     def process_frame_ultra_fast(self, frame):
-        """Ultra-fast frame processing for preview mode - sacrifices quality for speed"""
+        """Fast frame processing for preview mode - maintains good quality"""
         try:
-            # Aggressive scaling for maximum performance in preview mode
+            # Use same quality as fast mode to maintain consistent video quality
             height, width = frame.shape[:2]
             
-            # Scale to max 320 width for ultra-fast preview
-            if width > 320:
-                scale = 320 / width
+            # Use 720p target for consistent quality (same as fast mode)
+            target_width = 1280  # 720p width
+            if width > target_width:
+                scale = target_width / width
                 new_width = int(width * scale)
                 new_height = int(height * scale)
-                # Use fastest interpolation
-                frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_NEAREST)
+                # Use good interpolation for quality
+                frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
             
             # Convert BGR to RGB (OpenCV uses BGR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = rgb_frame.shape
             bytes_per_line = ch * w
             
-            # Create Qt image and pixmap with fastest format
+            # Create Qt image and pixmap
             qt_image = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
             pixmap = QPixmap.fromImage(qt_image)
             return pixmap
@@ -2989,51 +2990,11 @@ class TimelineWidget(QWidget):
                 painter.setFont(QFont("Segoe UI", 9, QFont.Bold))
                 painter.drawText(region_rect, Qt.AlignCenter, label)
         
-        # Draw modern current position indicator (use original timeline coordinates)
+        # Store playhead info for drawing last (to appear on top)
+        playhead_info = None
         if original_start_time <= self.current_position <= original_end_time:
             pos_x = self.original_time_to_x(self.current_position, timeline_rect)
-            
-            # Draw modern position line with glow effect
-            painter.setPen(QPen(QColor(37, 99, 235, 100), 6))  # Blue glow
-            painter.drawLine(int(pos_x), int(timeline_rect.top() - 5), int(pos_x), int(timeline_rect.bottom() + 5))
-            painter.setPen(QPen(QColor(37, 99, 235), 3))  # Solid blue line
-            painter.drawLine(int(pos_x), int(timeline_rect.top() - 5), int(pos_x), int(timeline_rect.bottom() + 5))
-            
-            # Draw modern time indicator above the playhead
-            time_str = self.format_time_mmss_ms(self.current_position)
-            painter.setFont(QFont("Segoe UI", 8, QFont.Bold))
-            text_rect = painter.fontMetrics().boundingRect(time_str)
-            
-            # Draw modern time background with rounded corners
-            time_bg_rect = QRectF(pos_x - text_rect.width()/2 - 8, timeline_rect.top() - 38, 
-                                text_rect.width() + 16, text_rect.height() + 8)
-            painter.fillRect(time_bg_rect, QColor(31, 41, 55, 255))  # Dark background matching theme
-            painter.setPen(QPen(QColor(37, 99, 235), 2))  # Blue border matching position line
-            painter.drawRoundedRect(time_bg_rect, 4, 4)
-            
-            # Draw subtle inner glow
-            inner_rect = QRectF(time_bg_rect.x() + 1, time_bg_rect.y() + 1, 
-                              time_bg_rect.width() - 2, time_bg_rect.height() - 2)
-            painter.setPen(QPen(QColor(55, 65, 81), 1))
-            painter.drawRoundedRect(inner_rect, 3, 3)
-            
-            # Draw time text with high contrast
-            painter.setPen(QPen(QColor(249, 250, 251), 1))  # Light text
-            painter.drawText(int(pos_x - text_rect.width()/2), int(timeline_rect.top() - 22), time_str)
-            
-            # Draw modern position indicator triangle with gradient
-            triangle_points = [
-                QPointF(pos_x, timeline_rect.top() - 5),
-                QPointF(pos_x - 7, timeline_rect.top() - 17),
-                QPointF(pos_x + 7, timeline_rect.top() - 17)
-            ]
-            
-            gradient = QLinearGradient(0, timeline_rect.top() - 17, 0, timeline_rect.top() - 5)
-            gradient.setColorAt(0, QColor(37, 99, 235))  # Modern blue
-            gradient.setColorAt(1, QColor(29, 78, 216))  # Darker blue
-            painter.setBrush(QBrush(gradient))
-            painter.setPen(QPen(QColor(30, 64, 175), 2))  # Dark blue border
-            painter.drawPolygon(triangle_points)
+            playhead_info = (pos_x, timeline_rect)
         
         # Draw modern time markers at top
         painter.setPen(QPen(QColor(156, 163, 175), 1))  # Modern gray
@@ -3116,6 +3077,52 @@ class TimelineWidget(QWidget):
             self.reset_button_rect = reset_btn_rect
         else:
             self.reset_button_rect = None
+            
+        # Draw playhead last so it appears on top of everything
+        if playhead_info:
+            pos_x, timeline_rect = playhead_info
+            
+            # Draw modern position line with glow effect
+            painter.setPen(QPen(QColor(37, 99, 235, 100), 6))  # Blue glow
+            painter.drawLine(int(pos_x), int(timeline_rect.top() - 5), int(pos_x), int(timeline_rect.bottom() + 5))
+            painter.setPen(QPen(QColor(37, 99, 235), 3))  # Solid blue line
+            painter.drawLine(int(pos_x), int(timeline_rect.top() - 5), int(pos_x), int(timeline_rect.bottom() + 5))
+            
+            # Draw modern time indicator above the playhead
+            time_str = self.format_time_mmss_ms(self.current_position)
+            painter.setFont(QFont("Segoe UI", 8, QFont.Bold))
+            text_rect = painter.fontMetrics().boundingRect(time_str)
+            
+            # Draw modern time background with rounded corners
+            time_bg_rect = QRectF(pos_x - text_rect.width()/2 - 8, timeline_rect.top() - 38, 
+                                text_rect.width() + 16, text_rect.height() + 8)
+            painter.fillRect(time_bg_rect, QColor(31, 41, 55, 255))  # Dark background matching theme
+            painter.setPen(QPen(QColor(37, 99, 235), 2))  # Blue border matching position line
+            painter.drawRoundedRect(time_bg_rect, 4, 4)
+            
+            # Draw subtle inner glow
+            inner_rect = QRectF(time_bg_rect.x() + 1, time_bg_rect.y() + 1, 
+                              time_bg_rect.width() - 2, time_bg_rect.height() - 2)
+            painter.setPen(QPen(QColor(55, 65, 81), 1))
+            painter.drawRoundedRect(inner_rect, 3, 3)
+            
+            # Draw time text with high contrast
+            painter.setPen(QPen(QColor(249, 250, 251), 1))  # Light text
+            painter.drawText(int(pos_x - text_rect.width()/2), int(timeline_rect.top() - 22), time_str)
+            
+            # Draw modern position indicator triangle with gradient
+            triangle_points = [
+                QPointF(pos_x, timeline_rect.top() - 5),
+                QPointF(pos_x - 7, timeline_rect.top() - 17),
+                QPointF(pos_x + 7, timeline_rect.top() - 17)
+            ]
+            
+            gradient = QLinearGradient(0, timeline_rect.top() - 17, 0, timeline_rect.top() - 5)
+            gradient.setColorAt(0, QColor(37, 99, 235))  # Modern blue
+            gradient.setColorAt(1, QColor(29, 78, 216))  # Darker blue
+            painter.setBrush(QBrush(gradient))
+            painter.setPen(QPen(QColor(30, 64, 175), 2))  # Dark blue border
+            painter.drawPolygon(triangle_points)
     
     def draw_waveform(self, painter, timeline_rect):
         """Draw the audio waveform as background with enhanced visibility and caching"""
@@ -4135,24 +4142,58 @@ class InteractiveVideoPlayer(QWidget):
             self.show_video_error(f"Video preview unavailable: {str(e)}")
             
     def display_threaded_frame(self, pixmap):
-        """Display frame from the video thread with proper scaling to fill container height"""
+        """Display frame from the video thread with proper scaling to fit container"""
         if hasattr(self, 'video_frame_label') and pixmap:
+            # DEBUG: Track threaded frame display
+            if not hasattr(self, '_debug_threaded_frame_count'):
+                self._debug_threaded_frame_count = 0
+                self._debug_threaded_last_label_size = None
+                
+            self._debug_threaded_frame_count += 1
+            
             label_size = self.video_frame_label.size()
             
-            # Scale pixmap to fill the container height while maintaining aspect ratio
+            # DEBUG: Monitor threaded frame display size changes
+            if (self._debug_threaded_frame_count % 30 == 0 or 
+                self._debug_threaded_last_label_size != label_size):
+                
+                print(f"🧵 THREADED DEBUG Frame {self._debug_threaded_frame_count}:")
+                print(f"  🏷️  Label size: {label_size}")
+                print(f"  🖼️  Input pixmap size: {pixmap.size()}")
+                
+                container_widget = self.video_frame_label.parent()
+                if container_widget:
+                    print(f"  📦 Container size: {container_widget.size()}")
+                    print(f"  📐 Container geometry: {container_widget.geometry()}")
+                
+                print(f"  🏷️  Label geometry: {self.video_frame_label.geometry()}")
+                
+                # Check if label size increased
+                if (self._debug_threaded_last_label_size and label_size and 
+                    (label_size.height() > self._debug_threaded_last_label_size.height() or 
+                     label_size.width() > self._debug_threaded_last_label_size.width())):
+                    print(f"🚨 THREADED LABEL SIZE INCREASED!")
+                    print(f"  📈 From: {self._debug_threaded_last_label_size}")
+                    print(f"  📈 To: {label_size}")
+                
+                self._debug_threaded_last_label_size = label_size
+                print()
+            
+            # Scale pixmap to fit the container while maintaining aspect ratio
             if label_size.width() > 0 and label_size.height() > 0:
-                # Calculate scaling to fill height (prioritize using full container height)
-                height_scale = label_size.height() / pixmap.height()
+                # Scale to fit within the container (not exceed it)
+                scaled_pixmap = pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 
-                # Calculate new dimensions based on height scaling
-                new_width = int(pixmap.width() * height_scale)
-                new_height = int(pixmap.height() * height_scale)
+                # DEBUG: Log scaling details
+                if self._debug_threaded_frame_count % 30 == 0:
+                    print(f"🧵 🖼️  Threaded scaled pixmap: {scaled_pixmap.size()}")
+                    print(f"🧵 🖼️  Target label size: {label_size}")
+                    print()
                 
-                # Scale the pixmap to fill the container height
-                scaled_pixmap = pixmap.scaled(new_width, new_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.video_frame_label.setPixmap(scaled_pixmap)
             else:
                 # Fallback if container size not available yet
+                print(f"🧵 ⚠️  Using fallback - label size not available: {label_size}")
                 self.video_frame_label.setPixmap(pixmap)
             
     def update_threaded_position(self, frame_number):
@@ -4230,14 +4271,36 @@ class InteractiveVideoPlayer(QWidget):
         if not hasattr(self, 'video_thread'):
             return
             
+        # DEBUG: Log playback state changes and container size
+        if hasattr(self, 'video_frame_label'):
+            container_widget = self.video_frame_label.parent()
+            print(f"🎮 PLAYBACK TOGGLE DEBUG:")
+            print(f"  🏷️  Label size before: {self.video_frame_label.size()}")
+            print(f"  🏷️  Label geometry before: {self.video_frame_label.geometry()}")
+            if container_widget:
+                print(f"  📦 Container size before: {container_widget.size()}")
+                print(f"  📐 Container geometry before: {container_widget.geometry()}")
+            
         if hasattr(self, 'is_threaded_playing') and self.is_threaded_playing:
+            print(f"  ⏸️  Pausing playback...")
             self.video_thread.pause()
             self.is_threaded_playing = False
             self.play_pause_btn.setText("Play")
         else:
+            print(f"  ▶️  Starting playback...")
             self.video_thread.play()
             self.is_threaded_playing = True
             self.play_pause_btn.setText("Pause")
+            
+        # DEBUG: Log container size after playback change
+        if hasattr(self, 'video_frame_label'):
+            container_widget = self.video_frame_label.parent()
+            print(f"  🏷️  Label size after: {self.video_frame_label.size()}")
+            print(f"  🏷️  Label geometry after: {self.video_frame_label.geometry()}")
+            if container_widget:
+                print(f"  📦 Container size after: {container_widget.size()}")
+                print(f"  📐 Container geometry after: {container_widget.geometry()}")
+            print()
             
     def stop_threaded_playback(self):
         """Stop threaded video playback"""
@@ -4284,8 +4347,22 @@ class InteractiveVideoPlayer(QWidget):
                 }
             """)
             self.video_frame_label.setScaledContents(False)  # Don't force scaling - we'll handle it manually
-            # Ensure the label expands to fill available space
-            self.video_frame_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            
+            # CRITICAL FIX: Use Fixed size policy to prevent auto-resizing during frame display
+            # This prevents the cascading resize issue where each frame causes the container to grow
+            self.video_frame_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            
+            # Get the current container size to set as the fixed size
+            container_size = self.size()
+            if container_size.width() > 0 and container_size.height() > 0:
+                # Set the label to exactly match the container size
+                self.video_frame_label.setFixedSize(container_size)
+                print(f"🔒 Fixed video label size to container: {container_size}")
+            else:
+                # Fallback to a reasonable default size
+                default_size = QSize(800, 450)  # 16:9 aspect ratio
+                self.video_frame_label.setFixedSize(default_size)
+                print(f"🔒 Fixed video label size to default: {default_size}")
             
             # Replace the video widget in the layout with the video frame label
             layout = self.layout()
@@ -4294,7 +4371,17 @@ class InteractiveVideoPlayer(QWidget):
                 self.video_widget.hide()
                 layout.addWidget(self.video_frame_label, 1)  # Stretch to fill available space
                 
-        print(f"Video display label added to layout with expanding size policy")
+            # DEBUG: Log initial setup
+            print(f"🔧 Video display label setup:")
+            print(f"  🏷️  Initial label size: {self.video_frame_label.size()}")
+            print(f"  🏷️  Initial label geometry: {self.video_frame_label.geometry()}")
+            print(f"  🎯 Label sizePolicy: {self.video_frame_label.sizePolicy().horizontalPolicy()}, {self.video_frame_label.sizePolicy().verticalPolicy()}")
+            if self.video_frame_label.parent():
+                print(f"  📦 Parent size: {self.video_frame_label.parent().size()}")
+                print(f"  📐 Parent geometry: {self.video_frame_label.parent().geometry()}")
+            print()
+                
+        print(f"Video display label added to layout with FIXED size policy to prevent auto-resizing")
         
     def display_cv2_frame(self, frame):
         """Convert OpenCV frame to QPixmap and display it with proper aspect ratio and quality"""
@@ -4302,68 +4389,86 @@ class InteractiveVideoPlayer(QWidget):
             if not hasattr(self, 'video_frame_label'):
                 self.setup_video_display_label()
                 
+            # DEBUG: Track video container size changes
+            if not hasattr(self, '_debug_frame_count'):
+                self._debug_frame_count = 0
+                self._debug_last_container_size = None
+                self._debug_last_label_size = None
+                
+            self._debug_frame_count += 1
+            
             # Get video label size for scaling
             label_size = self.video_frame_label.size()
             if label_size.width() <= 0 or label_size.height() <= 0:
                 return
                 
-            # Scale to fill the entire container height
-            original_height, original_width = frame.shape[:2]
-            container_width = label_size.width()
-            container_height = label_size.height()
+            # DEBUG: Monitor container and label size changes
+            container_widget = self.video_frame_label.parent()
+            container_size = container_widget.size() if container_widget else None
             
-            # Create cache key for current dimensions
-            cache_key = (original_width, original_height, container_width, container_height)
-            
-            # Check if we've already calculated dimensions for this configuration
-            if not hasattr(self, '_frame_size_cache') or self._frame_size_cache.get('key') != cache_key:
-                # Scale to fill the entire container
-                new_width = container_width
-                new_height = container_height
+            # Log size changes every 30 frames or when size changes
+            if (self._debug_frame_count % 30 == 0 or 
+                self._debug_last_container_size != container_size or 
+                self._debug_last_label_size != label_size):
                 
-                # Ensure minimum quality for very small containers
-                min_dimension = min(new_width, new_height)
-                if min_dimension < 240:  # Very small container
-                    scale_factor = 240 / min_dimension
-                    new_width = int(new_width * scale_factor)
-                    new_height = int(new_height * scale_factor)
+                print(f"🔍 DEBUG Frame {self._debug_frame_count}:")
+                print(f"  📦 Container size: {container_size}")
+                print(f"  🏷️  Label size: {label_size}")
+                print(f"  📏 Frame dimensions: {frame.shape[:2]}")
                 
-                # Cache the calculated dimensions
-                self._frame_size_cache = {
-                    'key': cache_key,
-                    'width': new_width,
-                    'height': new_height,
-                    'interpolation': cv2.INTER_CUBIC if new_width > original_width else cv2.INTER_AREA
-                }
-            
-            # Use cached dimensions
-            cache = self._frame_size_cache
-            new_width = cache['width']
-            new_height = cache['height']
-            interpolation = cache['interpolation']
-            
-            # Resize frame with cached settings
-            frame = cv2.resize(frame, (new_width, new_height), interpolation=interpolation)
-            
+                if container_widget:
+                    print(f"  📐 Container geometry: {container_widget.geometry()}")
+                    print(f"  🎯 Container sizePolicy: {container_widget.sizePolicy().horizontalPolicy()}, {container_widget.sizePolicy().verticalPolicy()}")
+                    
+                print(f"  🏷️  Label geometry: {self.video_frame_label.geometry()}")
+                print(f"  🎯 Label sizePolicy: {self.video_frame_label.sizePolicy().horizontalPolicy()}, {self.video_frame_label.sizePolicy().verticalPolicy()}")
+                
+                # Check if size increased
+                if (self._debug_last_container_size and container_size and 
+                    (container_size.height() > self._debug_last_container_size.height() or 
+                     container_size.width() > self._debug_last_container_size.width())):
+                    print(f"🚨 CONTAINER SIZE INCREASED!")
+                    print(f"  📈 From: {self._debug_last_container_size}")
+                    print(f"  📈 To: {container_size}")
+                    
+                if (self._debug_last_label_size and label_size and 
+                    (label_size.height() > self._debug_last_label_size.height() or 
+                     label_size.width() > self._debug_last_label_size.width())):
+                    print(f"🚨 LABEL SIZE INCREASED!")
+                    print(f"  📈 From: {self._debug_last_label_size}")
+                    print(f"  📈 To: {label_size}")
+                
+                self._debug_last_container_size = container_size
+                self._debug_last_label_size = label_size
+                print()
+                
             # Convert BGR to RGB (OpenCV uses BGR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            height, width, channels = rgb_frame.shape
-            bytes_per_line = channels * width
+            original_height, original_width, channels = rgb_frame.shape
+            bytes_per_line = channels * original_width
             
-            # Create QImage
-            qt_image = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            # Create QImage from original frame
+            qt_image = QImage(rgb_frame.data, original_width, original_height, bytes_per_line, QImage.Format_RGB888)
             if qt_image.isNull():
                 return
                 
-            # Create pixmap
+            # Create pixmap from QImage
             pixmap = QPixmap.fromImage(qt_image)
             if pixmap.isNull():
                 return
             
-            # Scale the pixmap to exactly match the label size
-            scaled_pixmap = pixmap.scaled(label_size, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            # Scale pixmap to fit within the label while maintaining aspect ratio
+            # This prevents the video from expanding beyond its container
+            scaled_pixmap = pixmap.scaled(label_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             
-            # Set the scaled pixmap
+            # DEBUG: Log pixmap scaling details
+            if self._debug_frame_count % 30 == 0:
+                print(f"🖼️  Original pixmap: {pixmap.size()}")
+                print(f"🖼️  Scaled pixmap: {scaled_pixmap.size()}")
+                print(f"🖼️  Target label size: {label_size}")
+                print()
+            
+            # Set the scaled pixmap - this will maintain stable dimensions
             self.video_frame_label.setPixmap(scaled_pixmap)
             
         except Exception as e:
@@ -4613,12 +4718,39 @@ class InteractiveVideoPlayer(QWidget):
         
     def resizeEvent(self, event):
         """Handle widget resize events"""
+        # DEBUG: Log video player widget resize events
+        print(f"🎬 VIDEO PLAYER WIDGET RESIZE EVENT:")
+        print(f"  📏 Old size: {event.oldSize()}")
+        print(f"  📏 New size: {event.size()}")
+        
+        # DEBUG: Log video frame label size before resize
+        if hasattr(self, 'video_frame_label'):
+            print(f"  🏷️  Label size before: {self.video_frame_label.size()}")
+            print(f"  🏷️  Label geometry before: {self.video_frame_label.geometry()}")
+        
         super().resizeEvent(event)
         
-        # The video frame label is now part of the layout, so it will resize automatically
-        if hasattr(self, 'video_frame_label') and self.video_frame_label:
-            print(f"Video container resized to: {self.size()}, video label size: {self.video_frame_label.size()}")
-            
+        # CRITICAL FIX: Update video frame label size when container is resized
+        # This allows proper resizing when window changes, but prevents auto-growth during playback
+        if hasattr(self, 'video_frame_label') and event.size().isValid():
+            new_size = event.size()
+            if new_size.width() > 0 and new_size.height() > 0:
+                # Only resize if the new size is significantly different (avoid micro-adjustments)
+                current_size = self.video_frame_label.size()
+                size_diff = abs(new_size.width() - current_size.width()) + abs(new_size.height() - current_size.height())
+                
+                if size_diff > 5:  # Only resize if difference is more than 5 pixels total
+                    print(f"  🔄 Updating video label fixed size: {current_size} → {new_size}")
+                    self.video_frame_label.setFixedSize(new_size)
+                else:
+                    print(f"  ⏭️  Skipping micro-resize (diff: {size_diff}px)")
+        
+        # DEBUG: Log video frame label size after resize
+        if hasattr(self, 'video_frame_label'):
+            print(f"  🏷️  Label size after: {self.video_frame_label.size()}")
+            print(f"  🏷️  Label geometry after: {self.video_frame_label.geometry()}")
+        print()
+        
         # Reposition message label if it exists and is visible
         if hasattr(self, 'video_message_label') and self.video_message_label.isVisible():
             # Position message label relative to the video frame label (or widget if no label)
@@ -4630,6 +4762,12 @@ class InteractiveVideoPlayer(QWidget):
             x = max(0, (widget_size.width() - label_size.width()) // 2)
             y = max(0, (widget_size.height() - label_size.height()) // 2)
             self.video_message_label.move(x, y)
+            
+        # In fullscreen mode, ensure video frame label fills the screen
+        if hasattr(self.parent(), 'is_fullscreen') and self.parent().is_fullscreen:
+            if hasattr(self, 'video_frame_label') and self.video_frame_label:
+                print(f"  🖥️  Setting fullscreen geometry: {event.size()}")
+                self.video_frame_label.setFixedSize(event.size())
             
     def cleanup_fallback_resources(self):
         """Clean up video resources"""
@@ -6335,9 +6473,33 @@ class SilenceCutterApp(QMainWindow):
     
     def resizeEvent(self, event):
         """Handle window resize events"""
+        # DEBUG: Log resize events
+        print(f"🔄 MAIN WINDOW RESIZE EVENT:")
+        print(f"  📏 Old size: {event.oldSize()}")
+        print(f"  📏 New size: {event.size()}")
+        
         super().resizeEvent(event)
         if self.loading_overlay:
             self.loading_overlay.resize(self.size())
+        
+        # Handle fullscreen video sizing
+        if self.is_fullscreen and hasattr(self, 'video_timeline_splitter'):
+            video_player = self.video_timeline_splitter.widget(0)
+            if video_player and hasattr(video_player, 'video_frame_label'):
+                print(f"  🖥️  Fullscreen video resize: {self.size()}")
+                # In fullscreen, make sure video frame label fills the entire window using fixed size
+                video_player.video_frame_label.setFixedSize(self.size())
+                video_player.video_frame_label.repaint()
+        
+        # DEBUG: Log video container size after resize
+        if hasattr(self, 'video_player') and hasattr(self.video_player, 'video_frame_label'):
+            container_widget = self.video_player.video_frame_label.parent()
+            print(f"  🏷️  Video label size after resize: {self.video_player.video_frame_label.size()}")
+            print(f"  🏷️  Video label geometry after resize: {self.video_player.video_frame_label.geometry()}")
+            if container_widget:
+                print(f"  📦 Video container size after resize: {container_widget.size()}")
+                print(f"  📐 Video container geometry after resize: {container_widget.geometry()}")
+        print()
         
         # Position fullscreen button in lower right corner of video container
         if hasattr(self, 'fullscreen_btn') and hasattr(self, 'video_player'):
@@ -6615,18 +6777,41 @@ class SilenceCutterApp(QMainWindow):
         # Store references to hidden widgets
         self.hidden_widgets = []
         
-        # Find and hide the main content layout children except video
+        # Find and hide the main content layout children except video splitter
         main_widget = self.centralWidget()
         if main_widget and main_widget.layout():
             main_layout = main_widget.layout()
             for i in range(main_layout.count()):
                 item = main_layout.itemAt(i)
-                if item and item.widget():
-                    widget = item.widget()
-                    # Hide header and content layout, but keep the video visible
-                    if not hasattr(widget, 'video_timeline_splitter'):
-                        widget.hide()
-                        self.hidden_widgets.append(widget)
+                if item:
+                    if item.layout():
+                        # This is the header layout - hide all its widgets
+                        header_layout = item.layout()
+                        for j in range(header_layout.count()):
+                            header_item = header_layout.itemAt(j)
+                            if header_item and header_item.widget():
+                                widget = header_item.widget()
+                                widget.hide()
+                                self.hidden_widgets.append(widget)
+                            elif header_item and header_item.layout():
+                                # Hide widgets in nested layouts (like title layout)
+                                nested_layout = header_item.layout()
+                                for k in range(nested_layout.count()):
+                                    nested_item = nested_layout.itemAt(k)
+                                    if nested_item and nested_item.widget():
+                                        widget = nested_item.widget()
+                                        widget.hide()
+                                        self.hidden_widgets.append(widget)
+                    elif item.layout() and hasattr(self, 'video_timeline_splitter'):
+                        # This is the content layout - hide the sidebar
+                        content_layout = item.layout()
+                        if content_layout.count() > 0:
+                            # Hide the left panel (sidebar)
+                            left_panel_item = content_layout.itemAt(0)
+                            if left_panel_item and left_panel_item.widget():
+                                left_panel = left_panel_item.widget()
+                                left_panel.hide()
+                                self.hidden_widgets.append(left_panel)
         
         # Hide the timeline section from the splitter
         if hasattr(self, 'video_timeline_splitter'):
@@ -6636,6 +6821,28 @@ class SilenceCutterApp(QMainWindow):
                 if timeline_widget:
                     timeline_widget.hide()
                     self.hidden_widgets.append(timeline_widget)
+            
+            # Make the video section take full space
+            self.video_timeline_splitter.setSizes([1, 0])
+            
+            # Ensure video frame label is visible and properly sized for fullscreen
+            video_player = self.video_timeline_splitter.widget(0)
+            if video_player and hasattr(video_player, 'video_frame_label'):
+                video_player.video_frame_label.show()
+                
+                # CRITICAL FIX: Keep Fixed size policy even in fullscreen to prevent auto-resizing
+                # Set the video frame label to fullscreen size but maintain Fixed policy
+                fullscreen_size = self.size()
+                video_player.video_frame_label.setFixedSize(fullscreen_size)
+                print(f"🖥️  Setting fullscreen video size: {fullscreen_size}")
+                
+                # Force update the layout to ensure proper sizing
+                video_player.layout().update()
+                QApplication.processEvents()
+                
+                # Ensure the video frame label gets the focus and is properly displayed
+                video_player.video_frame_label.raise_()
+                video_player.video_frame_label.repaint()
     
     def show_ui_after_fullscreen(self):
         """Show UI elements after exiting fullscreen"""
@@ -6644,6 +6851,26 @@ class SilenceCutterApp(QMainWindow):
             for widget in self.hidden_widgets:
                 widget.show()
             delattr(self, 'hidden_widgets')
+        
+        # Restore the splitter sizes to normal
+        if hasattr(self, 'video_timeline_splitter'):
+            # Restore 60% video, 40% timeline split
+            total_height = self.video_timeline_splitter.height()
+            video_height = int(total_height * 0.6)
+            timeline_height = total_height - video_height
+            self.video_timeline_splitter.setSizes([video_height, timeline_height])
+            
+            # CRITICAL FIX: Restore video frame label size to normal windowed size
+            video_player = self.video_timeline_splitter.widget(0)
+            if video_player and hasattr(video_player, 'video_frame_label'):
+                # Get the current video player size and set the label to match
+                windowed_size = video_player.size()
+                video_player.video_frame_label.setFixedSize(windowed_size)
+                print(f"🪟 Restored video label size to windowed: {windowed_size}")
+                
+                # Force layout update
+                video_player.layout().update()
+                QApplication.processEvents()
     
     def keyPressEvent(self, event):
         """Handle keyboard shortcuts"""
