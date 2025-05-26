@@ -1164,7 +1164,7 @@ class WaveformLoadingThread(QThread):
                 verbose=False, 
                 logger=None,
                 codec='pcm_s16le',
-                ffmpeg_params=['-ar', '22050']  # Lower sample rate for faster processing
+                ffmpeg_params=['-ar', '16000', '-ac', '1']  # Even lower sample rate and force mono for faster processing
             )
             video.close()
             
@@ -1199,7 +1199,7 @@ class WaveformLoadingThread(QThread):
             self.progress_updated.emit("Optimizing waveform display...")
             
             # Aggressive downsampling for smooth display
-            target_samples = 2500
+            target_samples = 1500  # Reduced from 2500 for faster processing
             if len(samples) > target_samples:
                 step = len(samples) // target_samples
                 samples = samples[::step]
@@ -2559,6 +2559,14 @@ class TimelineWidget(QWidget):
             print("No audio track found in video")
         self.update()  # Trigger repaint
         
+        # NOW hide the loading overlay since waveform loading is complete
+        parent = self.parent()
+        while parent and not isinstance(parent, QMainWindow):
+            parent = parent.parent()
+        if parent and hasattr(parent, 'hide_loading_overlay'):
+            print("✅ Waveform loading complete - hiding loading overlay")
+            QTimer.singleShot(500, parent.hide_loading_overlay)  # Small delay to show completion
+        
     def on_waveform_progress(self, message):
         """Handle waveform loading progress updates"""
         # Find parent SilenceCutterApp to update loading overlay
@@ -2566,8 +2574,22 @@ class TimelineWidget(QWidget):
         while parent and not isinstance(parent, QMainWindow):
             parent = parent.parent()
         
-        if parent and hasattr(parent, 'update_loading_progress'):
-            parent.update_loading_progress(message)
+        if parent and hasattr(parent, 'update_loading_progress_with_step'):
+            # Map waveform progress messages to step numbers
+            if "Loading video file" in message:
+                parent.update_loading_progress_with_step(message, 3)
+            elif "Extracting audio" in message:
+                parent.update_loading_progress_with_step(message, 3)
+            elif "Processing audio" in message:
+                parent.update_loading_progress_with_step(message, 3)
+            elif "Generating waveform" in message:
+                parent.update_loading_progress_with_step(message, 3)
+            elif "Optimizing waveform" in message:
+                parent.update_loading_progress_with_step(message, 3)
+            elif "Waveform ready" in message:
+                parent.update_loading_progress_with_step(message, 3)
+            else:
+                parent.update_loading_progress_with_step(message, 3)
     
     def set_duration(self, duration_seconds):
         """Set the total duration of the timeline"""
@@ -3671,8 +3693,8 @@ class InteractiveVideoPlayer(QWidget):
         parent = self.parent()
         while parent and not isinstance(parent, QMainWindow):
             parent = parent.parent()
-        if parent and hasattr(parent, 'update_loading_progress'):
-            parent.update_loading_progress("Setting up video player...")
+        if parent and hasattr(parent, 'update_loading_progress_with_step'):
+            parent.update_loading_progress_with_step("Setting up video player...", 2)
         
         if os.path.exists(video_path):
             # Convert path to proper format for QMediaPlayer
@@ -3680,8 +3702,8 @@ class InteractiveVideoPlayer(QWidget):
             print(f"Absolute path: {abs_path}")
             
             # Update loading progress
-            if parent and hasattr(parent, 'update_loading_progress'):
-                parent.update_loading_progress("Loading timeline waveform...")
+            if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                parent.update_loading_progress_with_step("Loading timeline waveform...", 3)
             
             # Load waveform data for timeline visualization
             self.timeline_widget.load_waveform(video_path)
@@ -3707,8 +3729,8 @@ class InteractiveVideoPlayer(QWidget):
             self.media_player.setPosition(0)     # Go back to start
             
             # Update loading progress
-            if parent and hasattr(parent, 'update_loading_progress'):
-                parent.update_loading_progress("Initializing media player...")
+            if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                parent.update_loading_progress_with_step("Initializing media player...", 4)
             
             # Set up a timer to check if media loaded successfully after a short delay
             QTimer.singleShot(1500, self.check_media_loaded)  # Reduced from 2000ms
@@ -3728,13 +3750,15 @@ class InteractiveVideoPlayer(QWidget):
             
         if status == QMediaPlayer.InvalidMedia or status == QMediaPlayer.NoMedia:
             print("QMediaPlayer failed to load video, setting up fallback display")
-            if parent and hasattr(parent, 'update_loading_progress'):
-                parent.update_loading_progress("Setting up enhanced video player...")
+            if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                parent.update_loading_progress_with_step("Setting up enhanced video player...", 5)
             self.setup_fallback_video_display()
         elif status == QMediaPlayer.LoadedMedia:
             print("QMediaPlayer loaded successfully")
-            if parent and hasattr(parent, 'hide_loading_overlay'):
-                parent.hide_loading_overlay()
+            if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                parent.update_loading_progress_with_step("Finalizing setup...", 6)
+            # DON'T hide loading overlay here - let waveform loading complete first
+            # The overlay will be hidden when waveform loading is done
             
     def setup_fallback_video_display(self):
         """Set up a multi-threaded fallback video display when QMediaPlayer fails"""
@@ -3820,12 +3844,15 @@ class InteractiveVideoPlayer(QWidget):
                 # Seek to first frame to show something
                 self.video_thread.seek(0)
                 
-                # Hide loading overlay
+                # Update final loading step but DON'T hide overlay yet
                 parent = self.parent()
                 while parent and not isinstance(parent, QMainWindow):
                     parent = parent.parent()
-                if parent and hasattr(parent, 'hide_loading_overlay'):
-                    parent.hide_loading_overlay()
+                if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                    parent.update_loading_progress_with_step("Video ready!", 6)
+                
+                # DON'T hide loading overlay here - let waveform loading complete first
+                # The overlay will be hidden when waveform loading is done
                 
                 # Show success message
                 self.show_video_message("✓ Multi-threaded video loaded!\n\nFast video playback ready. Click Play to start.\n• Audio preview available!\n• Perfect audio-timeline sync!")
@@ -4566,7 +4593,7 @@ class LoadingOverlay(QWidget):
         
         # Main container
         container = QWidget()
-        container.setFixedSize(300, 200)
+        container.setFixedSize(400, 300)  # Increased size for detailed progress and tips
         container.setStyleSheet("""
             QWidget {
                 background-color: rgba(45, 45, 45, 240);
@@ -4597,15 +4624,39 @@ class LoadingOverlay(QWidget):
         self.progress_label.setStyleSheet("""
             QLabel {
                 color: #bdc3c7;
-                font-size: 12px;
+                font-size: 11px;
                 background: transparent;
                 border: none;
+                padding: 5px;
+                line-height: 1.4;
             }
         """)
         self.progress_label.setAlignment(Qt.AlignCenter)
+        self.progress_label.setWordWrap(True)  # Allow text wrapping for longer messages
+        
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #555;
+                border-radius: 8px;
+                text-align: center;
+                background-color: rgba(60, 60, 60, 180);
+                color: white;
+                font-size: 10px;
+            }
+            QProgressBar::chunk {
+                background-color: #3498db;
+                border-radius: 6px;
+            }
+        """)
+        self.progress_bar.setFixedHeight(20)
         
         container_layout.addWidget(self.loading_label)
         container_layout.addWidget(self.progress_label)
+        container_layout.addWidget(self.progress_bar)
         
         layout.addWidget(container)
         self.setLayout(layout)
@@ -4614,13 +4665,26 @@ class LoadingOverlay(QWidget):
         """Show loading overlay with message"""
         self.loading_label.setText(message)
         self.progress_label.setText("Preparing timeline...")
+        self.progress_bar.setValue(0)  # Reset progress bar
         self.show()
         self.raise_()
         self.timer.start(50)  # 20 FPS animation
         
-    def update_progress(self, message):
-        """Update progress message"""
+    def update_progress(self, message, progress_percent=None):
+        """Update progress message and optionally progress bar"""
         self.progress_label.setText(message)
+        
+        # Extract progress percentage from message if not provided
+        if progress_percent is None:
+            # Look for percentage in message like "Step 3/6 (50%)"
+            import re
+            match = re.search(r'\((\d+)%\)', message)
+            if match:
+                progress_percent = int(match.group(1))
+        
+        # Update progress bar if percentage is available
+        if progress_percent is not None:
+            self.progress_bar.setValue(progress_percent)
         
     def hide_loading(self):
         """Hide loading overlay"""
@@ -4827,8 +4891,21 @@ class SilenceCutterApp(QMainWindow):
         )
         
         if file_path:
-            # Show loading overlay immediately
+            # Show loading overlay immediately with enhanced tracking
             self.show_loading_overlay("Loading Video...")
+            
+            # Initialize loading progress tracking
+            self.loading_start_time = time.time()
+            self.loading_steps_completed = 0
+            self.total_loading_steps = 6  # Total expected steps
+            
+            # Get file size for better time estimation
+            try:
+                file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+                self.estimated_total_time = max(5, min(30, file_size_mb * 0.5))  # Rough estimate: 0.5 seconds per MB, 5-30 second range
+                print(f"📁 File size: {file_size_mb:.1f} MB, estimated loading time: {self.estimated_total_time:.0f}s")
+            except:
+                self.estimated_total_time = 15  # Default estimate
             
             # Clear previous data first
             self.clear_previous_data()
@@ -4840,8 +4917,8 @@ class SilenceCutterApp(QMainWindow):
             self.silent_parts = []
             self.process_btn.setEnabled(False)
             
-            # Update loading message
-            self.update_loading_progress("Initializing video player...")
+            # Update loading message with step tracking
+            self.update_loading_progress_with_step("Initializing video player...", 1)
             
             # Load video into the player
             self.video_player.load_video(file_path)
@@ -4849,9 +4926,74 @@ class SilenceCutterApp(QMainWindow):
             # Enable performance optimizations immediately
             self.enable_performance_optimizations()
             
-            # Loading will be hidden automatically when video player finishes loading
-            # Fallback timer in case something goes wrong
-            QTimer.singleShot(3000, self.hide_loading_overlay)
+            # Extended fallback timer - only hide if something goes wrong
+            QTimer.singleShot(30000, self.hide_loading_overlay_fallback)  # 30 seconds instead of 3
+    
+    def update_loading_progress_with_step(self, message, step_number=None):
+        """Update loading progress with step tracking and time estimation"""
+        if step_number is not None:
+            self.loading_steps_completed = step_number
+            
+        # Calculate progress percentage
+        progress_percent = int((self.loading_steps_completed / self.total_loading_steps) * 100)
+        
+        # Calculate estimated time remaining
+        if hasattr(self, 'loading_start_time') and self.loading_steps_completed > 0:
+            elapsed_time = time.time() - self.loading_start_time
+            
+            # Use both step-based and file-size-based estimation
+            avg_time_per_step = elapsed_time / self.loading_steps_completed
+            remaining_steps = self.total_loading_steps - self.loading_steps_completed
+            step_based_estimate = remaining_steps * avg_time_per_step
+            
+            # File-size-based estimate
+            if hasattr(self, 'estimated_total_time'):
+                progress_ratio = self.loading_steps_completed / self.total_loading_steps
+                file_based_estimate = self.estimated_total_time * (1 - progress_ratio)
+                
+                # Use weighted average of both estimates
+                estimated_remaining = (step_based_estimate * 0.7) + (file_based_estimate * 0.3)
+            else:
+                estimated_remaining = step_based_estimate
+            
+            if estimated_remaining > 60:
+                time_str = f"~{int(estimated_remaining/60)}m {int(estimated_remaining%60)}s remaining"
+            elif estimated_remaining > 10:
+                time_str = f"~{int(estimated_remaining)}s remaining"
+            else:
+                time_str = "Almost done..."
+        else:
+            if hasattr(self, 'estimated_total_time'):
+                time_str = f"~{int(self.estimated_total_time)}s estimated"
+            else:
+                time_str = "Calculating time..."
+        
+        # Add helpful tip based on current step
+        if self.loading_steps_completed <= 3:
+            tip = "💡 Tip: Processing audio for waveform visualization"
+        elif self.loading_steps_completed <= 5:
+            tip = "💡 Tip: Setting up video player and timeline"
+        else:
+            tip = "💡 Tip: Finalizing setup - almost ready!"
+        
+        # Format the complete message
+        full_message = f"{message}\n\nStep {self.loading_steps_completed}/{self.total_loading_steps} ({progress_percent}%)\n{time_str}\n\n{tip}"
+        
+        if self.loading_overlay:
+            self.loading_overlay.update_progress(full_message)
+            QApplication.processEvents()
+    
+    def hide_loading_overlay_fallback(self):
+        """Fallback method to hide loading overlay if something goes wrong"""
+        if self.loading_overlay and self.loading_overlay.isVisible():
+            print("⚠️ Loading overlay fallback timeout - hiding overlay")
+            self.hide_loading_overlay()
+            # Show a message that loading is still happening in background
+            QMessageBox.information(
+                self, 
+                "Loading in Background", 
+                "Video is still loading in the background.\nThe application may be slow until loading completes."
+            )
     
     def detect_silence(self):
         if not self.video_path:
