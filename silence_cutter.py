@@ -5475,31 +5475,10 @@ class SilenceCutterApp(QMainWindow):
             }
         """)
         
-        theme_btn = QPushButton("🌙")
-        theme_btn.setObjectName("secondaryButton")
-        theme_btn.setMaximumWidth(50)
-        theme_btn.setMinimumHeight(40)
-        theme_btn.setMaximumHeight(40)
-        theme_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #374151;
-                border-radius: 8px;
-                padding: 8px;
-                min-width: 40px;
-                max-width: 40px;
-                min-height: 40px;
-                max-height: 40px;
-            }
-            QPushButton:hover {
-                background-color: #4b5563;
-            }
-        """)
-        
         header_layout.addLayout(title_layout)
         header_layout.addWidget(shortcuts_btn)
         header_layout.addWidget(help_btn)
         header_layout.addWidget(self.export_btn)
-        header_layout.addWidget(theme_btn)
         
         main_layout.addLayout(header_layout)
         
@@ -6328,12 +6307,27 @@ class SilenceCutterApp(QMainWindow):
             import platform
             
             folder_path = os.path.dirname(output_path)
-            if platform.system() == "Windows":
-                subprocess.Popen(f'explorer /select,"{output_path}"')
-            elif platform.system() == "Darwin":  # macOS
-                subprocess.Popen(["open", "-R", output_path])
-            else:  # Linux
-                subprocess.Popen(["xdg-open", folder_path])
+            try:
+                if platform.system() == "Windows":
+                    # Use proper list format and normalize path separators
+                    normalized_path = os.path.normpath(output_path)
+                    subprocess.Popen(['explorer', '/select,', normalized_path])
+                elif platform.system() == "Darwin":  # macOS
+                    subprocess.Popen(["open", "-R", output_path])
+                else:  # Linux
+                    subprocess.Popen(["xdg-open", folder_path])
+            except Exception as e:
+                print(f"Error opening folder: {e}")
+                # Fallback: try to open just the folder
+                try:
+                    if platform.system() == "Windows":
+                        subprocess.Popen(['explorer', folder_path])
+                    elif platform.system() == "Darwin":  # macOS
+                        subprocess.Popen(["open", folder_path])
+                    else:  # Linux
+                        subprocess.Popen(["xdg-open", folder_path])
+                except Exception as e2:
+                    print(f"Fallback folder opening also failed: {e2}")
     
     def closeEvent(self, event):
         """Handle application close event"""
