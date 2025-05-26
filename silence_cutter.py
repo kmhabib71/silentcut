@@ -1139,89 +1139,152 @@ class WaveformLoadingThread(QThread):
         """Load waveform data in background"""
         try:
             print("🌊 Loading waveform in background...")
-            self.progress_updated.emit("Loading video file...")
             
-            # Extract audio using MoviePy
-            import moviepy.editor as mp
-            video = mp.VideoFileClip(self.video_path)
+            # Check if this is an audio-only file
+            audio_extensions = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'}
+            file_ext = os.path.splitext(self.video_path)[1].lower()
+            is_audio_only = file_ext in audio_extensions
             
-            # Emit duration immediately for instant timeline setup
-            if video.duration > 0:
-                self.duration_loaded.emit(video.duration)
+            if is_audio_only:
+                print(f"🎵 Loading audio-only file: {self.video_path}")
+                self.progress_updated.emit("Loading audio file...")
                 
-            self.progress_updated.emit("Extracting audio track...")
-            
-            if video.audio is None:
-                print("No audio track found in video")
-                self.waveform_loaded.emit(None, 0)
-                video.close()
+                # Load audio directly using pydub
+                from pydub import AudioSegment
+                audio = AudioSegment.from_file(self.video_path)
+                
+                # Emit duration immediately for instant timeline setup
+                duration_seconds = len(audio) / 1000.0
+                self.duration_loaded.emit(duration_seconds)
+                print(f"🎵 Audio duration: {duration_seconds:.2f} seconds")
+                
+                self.progress_updated.emit("Processing audio data...")
+                
+                # Convert to mono for waveform visualization
+                if audio.channels > 1:
+                    audio = audio.set_channels(1)
+                    
+                # Get raw audio data
+                raw_data = audio.raw_data
+                
+                # Convert to numpy array
+                import struct
+                if audio.sample_width == 1:
+                    samples = struct.unpack(f'{len(raw_data)}B', raw_data)
+                    samples = [(s - 128) / 128.0 for s in samples]
+                elif audio.sample_width == 2:
+                    samples = struct.unpack(f'{len(raw_data)//2}h', raw_data)
+                    samples = [s / 32768.0 for s in samples]
+                elif audio.sample_width == 4:
+                    samples = struct.unpack(f'{len(raw_data)//4}i', raw_data)
+                    samples = [s / 2147483648.0 for s in samples]
+                else:
+                    print(f"Unsupported sample width: {audio.sample_width}")
+                    samples = []
+                
+                self.progress_updated.emit("Optimizing waveform display...")
+                
+                # Aggressive downsampling for smooth display
+                target_samples = 1500
+                if len(samples) > target_samples:
+                    step = len(samples) // target_samples
+                    samples = samples[::step]
+                
+                max_amplitude = max(abs(s) for s in samples) if samples else 1.0
+                
+                self.progress_updated.emit("Audio waveform ready!")
+                print(f"🎵 Audio waveform generated: {len(samples)} samples, max amplitude: {max_amplitude:.3f}")
+                
+                # Emit the loaded waveform data
+                self.waveform_loaded.emit(samples, max_amplitude)
                 return
                 
-            # Create temporary audio file
-            import tempfile
-            temp_audio_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
-            temp_audio_file.close()
-            
-            self.progress_updated.emit("Processing audio data...")
-            
-            # Extract audio to temporary file with optimized parameters for speed
-            video.audio.write_audiofile(
-                temp_audio_file.name, 
-                verbose=False, 
-                logger=None,
-                codec='pcm_s16le',
-                ffmpeg_params=['-ar', '16000', '-ac', '1']  # Even lower sample rate and force mono for faster processing
-            )
-            video.close()
-            
-            self.progress_updated.emit("Generating waveform...")
-            
-            # Load audio with pydub
-            from pydub import AudioSegment
-            audio = AudioSegment.from_file(temp_audio_file.name)
-            
-            # Convert to mono for waveform visualization
-            if audio.channels > 1:
-                audio = audio.set_channels(1)
-                
-            # Get raw audio data
-            raw_data = audio.raw_data
-            
-            # Convert to numpy array
-            import struct
-            if audio.sample_width == 1:
-                samples = struct.unpack(f'{len(raw_data)}B', raw_data)
-                samples = [(s - 128) / 128.0 for s in samples]
-            elif audio.sample_width == 2:
-                samples = struct.unpack(f'{len(raw_data)//2}h', raw_data)
-                samples = [s / 32768.0 for s in samples]
-            elif audio.sample_width == 4:
-                samples = struct.unpack(f'{len(raw_data)//4}i', raw_data)
-                samples = [s / 2147483648.0 for s in samples]
             else:
-                print(f"Unsupported sample width: {audio.sample_width}")
-                samples = []
-            
-            self.progress_updated.emit("Optimizing waveform display...")
-            
-            # Aggressive downsampling for smooth display
-            target_samples = 1500  # Reduced from 2500 for faster processing
-            if len(samples) > target_samples:
-                step = len(samples) // target_samples
-                samples = samples[::step]
-            
-            max_amplitude = max(abs(s) for s in samples) if samples else 1.0
-            
-            # Clean up temporary file
-            try:
-                os.unlink(temp_audio_file.name)
-            except:
-                pass
+                # Handle video files
+                print(f"🎬 Loading video file: {self.video_path}")
+                self.progress_updated.emit("Loading video file...")
                 
-            self.progress_updated.emit("Waveform ready!")
-            
-            # Emit the loaded waveform data
-            self.waveform_loaded.emit(samples, max_amplitude)
+                # Extract audio using MoviePy
+                import moviepy.editor as mp
+                video = mp.VideoFileClip(self.video_path)
+                
+                # Emit duration immediately for instant timeline setup
+                if video.duration > 0:
+                    self.duration_loaded.emit(video.duration)
+                    
+                self.progress_updated.emit("Extracting audio track...")
+                
+                if video.audio is None:
+                    print("No audio track found in video")
+                    self.waveform_loaded.emit(None, 0)
+                    video.close()
+                    return
+                
+                # Create temporary audio file
+                import tempfile
+                temp_audio_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+                temp_audio_file.close()
+                
+                self.progress_updated.emit("Processing audio data...")
+                
+                # Extract audio to temporary file with optimized parameters for speed
+                video.audio.write_audiofile(
+                    temp_audio_file.name, 
+                    verbose=False, 
+                    logger=None,
+                    codec='pcm_s16le',
+                    ffmpeg_params=['-ar', '16000', '-ac', '1']  # Even lower sample rate and force mono for faster processing
+                )
+                video.close()
+                
+                self.progress_updated.emit("Generating waveform...")
+                
+                # Load audio with pydub
+                from pydub import AudioSegment
+                audio = AudioSegment.from_file(temp_audio_file.name)
+                
+                # Convert to mono for waveform visualization
+                if audio.channels > 1:
+                    audio = audio.set_channels(1)
+                    
+                # Get raw audio data
+                raw_data = audio.raw_data
+                
+                # Convert to numpy array
+                import struct
+                if audio.sample_width == 1:
+                    samples = struct.unpack(f'{len(raw_data)}B', raw_data)
+                    samples = [(s - 128) / 128.0 for s in samples]
+                elif audio.sample_width == 2:
+                    samples = struct.unpack(f'{len(raw_data)//2}h', raw_data)
+                    samples = [s / 32768.0 for s in samples]
+                elif audio.sample_width == 4:
+                    samples = struct.unpack(f'{len(raw_data)//4}i', raw_data)
+                    samples = [s / 2147483648.0 for s in samples]
+                else:
+                    print(f"Unsupported sample width: {audio.sample_width}")
+                    samples = []
+                
+                self.progress_updated.emit("Optimizing waveform display...")
+                
+                # Aggressive downsampling for smooth display
+                target_samples = 1500  # Reduced from 2500 for faster processing
+                if len(samples) > target_samples:
+                    step = len(samples) // target_samples
+                    samples = samples[::step]
+                
+                max_amplitude = max(abs(s) for s in samples) if samples else 1.0
+                
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_audio_file.name)
+                except:
+                    pass
+                    
+                self.progress_updated.emit("Video waveform ready!")
+                
+                # Emit the loaded waveform data
+                self.waveform_loaded.emit(samples, max_amplitude)
                 
         except Exception as e:
             print(f"Error loading waveform: {e}")
@@ -1281,53 +1344,80 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(5)
             QApplication.processEvents()  # Process events to update GUI
             
-            # Modify moviepy's FFMPEG_BINARY setting to use our detected FFmpeg path
-            from moviepy.config import change_settings
-            change_settings({"FFMPEG_BINARY": self.ffmpeg_path})
+            # Check if this is an audio-only file
+            audio_extensions = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'}
+            file_ext = os.path.splitext(self.video_path)[1].lower()
+            is_audio_only = file_ext in audio_extensions
             
-            # Extract audio from video more efficiently
-            print(f"Loading video from: {self.video_path}")
-            self.progress_updated.emit(10)
-            QApplication.processEvents()
-            
-            # Load video more efficiently
-            video = mp.VideoFileClip(self.video_path)
-            audio_duration_ms = int(video.audio.duration * 1000)
-            print(f"Video loaded, audio duration: {audio_duration_ms} ms")
-            self.progress_updated.emit(20)
-            QApplication.processEvents()
-            
-            # Create temporary audio file with optimized settings
-            temp_audio = tempfile.NamedTemporaryFile(suffix=f'_sid_{os.getpid()}_{int(time.time())}.wav', delete=False)
-            temp_audio_path = temp_audio.name
-            temp_audio.close()
-            print(f"Extracting audio to: {temp_audio_path}")
-            
-            self.progress_updated.emit(30)
-            QApplication.processEvents()
-            
-            # Extract audio with optimized settings for faster processing
-            video.audio.write_audiofile(
-                temp_audio_path, 
-                verbose=False, 
-                logger=None,
-                codec='pcm_s16le',  # Fast codec
-                ffmpeg_params=['-ar', '22050']  # Lower sample rate for faster processing
-            )
-            print(f"Audio extracted successfully")
-            self.progress_updated.emit(50)
-            QApplication.processEvents()
-            
-            # Load audio and detect non-silent parts with optimized settings
-            print(f"Loading audio for accurate silence detection")
-            audio = AudioSegment.from_file(temp_audio_path)
-            print(f"Audio loaded: duration={len(audio)}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
-            self.progress_updated.emit(60)
-            QApplication.processEvents()
-            
-            # Convert to mono for faster processing while maintaining accuracy
-            if audio.channels > 1:
-                audio = audio.set_channels(1)
+            if is_audio_only:
+                print(f"Detected audio-only file: {self.video_path}")
+                self.progress_updated.emit(10)
+                QApplication.processEvents()
+                
+                # For audio files, load directly with pydub
+                print(f"Loading audio directly from: {self.video_path}")
+                audio = AudioSegment.from_file(self.video_path)
+                audio_duration_ms = len(audio)
+                print(f"Audio loaded directly: duration={audio_duration_ms}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
+                self.progress_updated.emit(40)
+                QApplication.processEvents()
+                
+                # Convert to mono for faster processing while maintaining accuracy
+                if audio.channels > 1:
+                    audio = audio.set_channels(1)
+                
+                self.progress_updated.emit(60)
+                QApplication.processEvents()
+                
+            else:
+                # For video files, extract audio using moviepy
+                # Modify moviepy's FFMPEG_BINARY setting to use our detected FFmpeg path
+                from moviepy.config import change_settings
+                change_settings({"FFMPEG_BINARY": self.ffmpeg_path})
+                
+                # Extract audio from video more efficiently
+                print(f"Loading video from: {self.video_path}")
+                self.progress_updated.emit(10)
+                QApplication.processEvents()
+                
+                # Load video more efficiently
+                video = mp.VideoFileClip(self.video_path)
+                audio_duration_ms = int(video.audio.duration * 1000)
+                print(f"Video loaded, audio duration: {audio_duration_ms} ms")
+                self.progress_updated.emit(20)
+                QApplication.processEvents()
+                
+                # Create temporary audio file with optimized settings
+                temp_audio = tempfile.NamedTemporaryFile(suffix=f'_sid_{os.getpid()}_{int(time.time())}.wav', delete=False)
+                temp_audio_path = temp_audio.name
+                temp_audio.close()
+                print(f"Extracting audio to: {temp_audio_path}")
+                
+                self.progress_updated.emit(30)
+                QApplication.processEvents()
+                
+                # Extract audio with optimized settings for faster processing
+                video.audio.write_audiofile(
+                    temp_audio_path, 
+                    verbose=False, 
+                    logger=None,
+                    codec='pcm_s16le',  # Fast codec
+                    ffmpeg_params=['-ar', '22050']  # Lower sample rate for faster processing
+                )
+                print(f"Audio extracted successfully")
+                self.progress_updated.emit(50)
+                QApplication.processEvents()
+                
+                # Load audio and detect non-silent parts with optimized settings
+                print(f"Loading audio for accurate silence detection")
+                audio = AudioSegment.from_file(temp_audio_path)
+                print(f"Audio loaded: duration={len(audio)}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
+                self.progress_updated.emit(60)
+                QApplication.processEvents()
+                
+                # Convert to mono for faster processing while maintaining accuracy
+                if audio.channels > 1:
+                    audio = audio.set_channels(1)
             
             # Detect non-silent parts with optimized parameters
             print(f"Detecting non-silent parts with silence threshold={self.silence_threshold}dB, min_silence_len={self.min_silence_duration}ms")
@@ -1429,11 +1519,18 @@ class SilenceDetectionThread(QThread):
                     'selected': True  # Default to cutting this silence
                 })
             
-            # Clean up temp file
-            try:
-                os.unlink(temp_audio_path)
-            except:
-                pass
+            # Clean up temp file (only for video files)
+            if not is_audio_only:
+                try:
+                    os.unlink(temp_audio_path)
+                except:
+                    pass
+                    
+                # Clean up video clip
+                try:
+                    video.close()
+                except:
+                    pass
                 
             # Final progress update
             self.progress_updated.emit(100)
@@ -1547,6 +1644,121 @@ class SilenceDetectionThread(QThread):
             print(f"Fast FFmpeg detection failed: {e}")
             print("Falling back to slower detection method...")
             return None
+
+class AudioProcessingThread(QThread):
+    """Dedicated thread for processing audio-only files"""
+    progress_updated = pyqtSignal(int)
+    processing_complete = pyqtSignal(str)
+    
+    def __init__(self, audio_path, silent_parts, output_path):
+        super().__init__()
+        self.audio_path = audio_path
+        self.silent_parts = silent_parts
+        self.output_path = output_path
+        self.ffmpeg_path = self.get_ffmpeg_path()
+    
+    def get_ffmpeg_path(self):
+        """Try to find FFmpeg executable path"""
+        # First try directly if it's in PATH
+        try:
+            import subprocess
+            result = subprocess.run(['ffmpeg', '-version'], 
+                                   stdout=subprocess.PIPE, 
+                                   stderr=subprocess.PIPE,
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                return "ffmpeg"
+        except Exception:
+            pass
+        
+        # Check known locations
+        known_locations = [
+            "C:\\ffmpeg\\bin\\ffmpeg.exe",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg.exe")
+        ]
+        
+        for location in known_locations:
+            if os.path.exists(location):
+                return location
+                
+        return "ffmpeg"
+    
+    def run(self):
+        try:
+            print(f"🎵 Processing audio file: {self.audio_path}")
+            
+            # Load audio using pydub
+            from pydub import AudioSegment
+            audio = AudioSegment.from_file(self.audio_path)
+            
+            self.progress_updated.emit(20)
+            
+            # Process the silent parts to get segments to keep
+            sorted_parts = sorted(self.silent_parts, key=lambda x: x['start'])
+            segments = []
+            last_end = 0
+            
+            for part in sorted_parts:
+                if part['selected']:  # Only cut if selected
+                    if part['start'] > last_end:
+                        # Add segment before the silence (convert seconds to milliseconds)
+                        start_ms = int(last_end * 1000)
+                        end_ms = int(part['start'] * 1000)
+                        segment = audio[start_ms:end_ms]
+                        segments.append(segment)
+                    # Update last_end to be the end of this silent part
+                    last_end = part['end']
+            
+            self.progress_updated.emit(50)
+            
+            # Add the final segment if needed
+            if last_end < len(audio) / 1000.0:  # Convert audio length to seconds
+                start_ms = int(last_end * 1000)
+                final_segment = audio[start_ms:]
+                segments.append(final_segment)
+            
+            self.progress_updated.emit(70)
+            
+            # Combine all segments
+            if segments:
+                result_audio = segments[0]
+                for segment in segments[1:]:
+                    result_audio += segment
+            else:
+                # No segments were cut, use original audio
+                result_audio = audio
+            
+            self.progress_updated.emit(90)
+            
+            # Export the result
+            # Determine output format based on file extension
+            output_ext = os.path.splitext(self.output_path)[1].lower()
+            
+            if output_ext == '.mp3':
+                result_audio.export(self.output_path, format="mp3", bitrate="192k")
+            elif output_ext == '.wav':
+                result_audio.export(self.output_path, format="wav")
+            elif output_ext == '.flac':
+                result_audio.export(self.output_path, format="flac")
+            elif output_ext == '.aac':
+                result_audio.export(self.output_path, format="aac", bitrate="128k")
+            elif output_ext == '.ogg':
+                result_audio.export(self.output_path, format="ogg")
+            elif output_ext == '.m4a':
+                result_audio.export(self.output_path, format="mp4", bitrate="192k")
+            else:
+                # Default to mp3
+                result_audio.export(self.output_path, format="mp3", bitrate="192k")
+            
+            self.progress_updated.emit(100)
+            print(f"✅ Audio processing completed: {self.output_path}")
+            self.processing_complete.emit(self.output_path)
+            
+        except Exception as e:
+            print(f"❌ Audio processing error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            self.processing_complete.emit("")
 
 class ProcessingThread(QThread):
     progress_updated = pyqtSignal(int)
@@ -3978,12 +4190,23 @@ class InteractiveVideoPlayer(QWidget):
         self.slider_pressed = False
         
     def load_video(self, video_path):
-        """Load a video file into the player"""
+        """Load a video or audio file into the player"""
         # Clean up previous resources
         self.cleanup_fallback_resources()
         
         self.video_path = video_path
-        print(f"Loading video into player: {video_path}")
+        
+        # Check if this is an audio-only file
+        audio_extensions = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'}
+        file_ext = os.path.splitext(video_path)[1].lower()
+        is_audio_only = file_ext in audio_extensions
+        
+        if is_audio_only:
+            print(f"Loading audio file into player: {video_path}")
+            self.load_audio_only(video_path)
+            return
+        else:
+            print(f"Loading video into player: {video_path}")
         
         # Update loading progress
         parent = self.parent()
@@ -4035,6 +4258,76 @@ class InteractiveVideoPlayer(QWidget):
             print(f"Video file does not exist: {video_path}")
             QMessageBox.critical(self, "Error", f"Video file not found: {video_path}")
     
+    def load_audio_only(self, audio_path):
+        """Load an audio-only file and hide video display"""
+        print(f"Setting up audio-only mode for: {audio_path}")
+        
+        # Set the audio-only flag
+        self.is_audio_only = True
+        self.video_path = audio_path
+        
+        # Update loading progress
+        parent = self.parent()
+        while parent and not isinstance(parent, QMainWindow):
+            parent = parent.parent()
+        if parent and hasattr(parent, 'update_loading_progress_with_step'):
+            parent.update_loading_progress_with_step("Setting up audio player...", 2)
+        
+        # Hide video display area and show audio message
+        if hasattr(self, 'video_widget'):
+            self.video_widget.hide()
+        
+        # Show audio-only message in video area
+        self.show_video_message("🎵 Audio File Loaded\n\nThis is an audio-only file.\nUse the timeline below to navigate and preview audio.\n\n• Waveform visualization available\n• All silence detection features work normally")
+        
+        # Load waveform data for timeline visualization
+        if parent and hasattr(parent, 'update_loading_progress_with_step'):
+            parent.update_loading_progress_with_step("Loading audio waveform...", 3)
+        
+        # Get audio duration first for proper timeline setup
+        try:
+            from pydub import AudioSegment
+            audio = AudioSegment.from_file(audio_path)
+            duration_seconds = len(audio) / 1000.0
+            print(f"🎵 Audio duration detected: {duration_seconds:.2f} seconds")
+            
+            # Set timeline duration immediately
+            self.timeline_widget.set_duration(duration_seconds)
+            
+            # Set position slider range
+            duration_ms = int(duration_seconds * 1000)
+            self.position_slider.setRange(0, duration_ms)
+            
+        except Exception as e:
+            print(f"Error getting audio duration: {e}")
+        
+        self.timeline_widget.load_waveform(audio_path)
+        
+        # Set up basic audio playback using QMediaPlayer
+        if os.path.exists(audio_path):
+            abs_path = os.path.abspath(audio_path)
+            url = QUrl.fromLocalFile(abs_path)
+            media_content = QMediaContent(url)
+            self.media_player.setMedia(media_content)
+            
+            # Enable basic controls
+            self.play_pause_btn.setEnabled(True)
+            self.stop_btn.setEnabled(True)
+            self.position_slider.setEnabled(True)
+            
+            # Try to get duration
+            self.media_player.setPosition(1000)
+            self.media_player.setPosition(0)
+            
+            if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                parent.update_loading_progress_with_step("Audio ready!", 4)
+            
+            # Check if media loaded successfully
+            QTimer.singleShot(1000, self.check_media_loaded)
+        else:
+            print(f"Audio file does not exist: {audio_path}")
+            QMessageBox.critical(self, "Error", f"Audio file not found: {audio_path}")
+    
     def check_media_loaded(self):
         """Check if media loaded successfully, if not, show a fallback message"""
         status = self.media_player.mediaStatus()
@@ -4051,14 +4344,67 @@ class InteractiveVideoPlayer(QWidget):
             self.setup_fallback_video_display()
         elif status == QMediaPlayer.LoadedMedia:
             print("QMediaPlayer loaded successfully")
-            if parent and hasattr(parent, 'update_loading_progress_with_step'):
-                parent.update_loading_progress_with_step("Finalizing setup...", 6)
+            
+            # For audio files, set up duration properly
+            if hasattr(self, 'is_audio_only') and self.is_audio_only:
+                # Get duration from QMediaPlayer
+                duration_ms = self.media_player.duration()
+                if duration_ms > 0:
+                    duration_seconds = duration_ms / 1000.0
+                    self.timeline_widget.set_duration(duration_seconds)
+                    self.position_slider.setRange(0, duration_ms)
+                    
+                    # Store duration for the main app
+                    parent = self.parent()
+                    while parent and not isinstance(parent, QMainWindow):
+                        parent = parent.parent()
+                    if parent:
+                        parent.actual_duration_seconds = duration_seconds
+                        parent.video_duration_ms = duration_ms  # For time label display
+                    
+                    print(f"Audio duration from QMediaPlayer: {duration_seconds:.2f}s")
+                
+                if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                    parent.update_loading_progress_with_step("Audio ready!", 4)
+            else:
+                if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                    parent.update_loading_progress_with_step("Finalizing setup...", 6)
+            
             # DON'T hide loading overlay here - let waveform loading complete first
             # The overlay will be hidden when waveform loading is done
             
     def setup_fallback_video_display(self):
         """Set up a multi-threaded fallback video display when QMediaPlayer fails"""
         try:
+            # Check if this is an audio-only file
+            if hasattr(self, 'is_audio_only') and self.is_audio_only:
+                print("Setting up audio-only playback...")
+                
+                # For audio files, get duration using pydub
+                from pydub import AudioSegment
+                audio = AudioSegment.from_file(self.video_path)
+                actual_audio_duration = len(audio) / 1000.0
+                print(f"Audio player using exact audio duration: {actual_audio_duration:.6f}s (high precision)")
+                
+                # Set up basic audio playback without video thread
+                duration_ms = int(actual_audio_duration * 1000)
+                self.video_duration_ms = duration_ms
+                self.actual_duration_seconds = actual_audio_duration
+                self.using_fallback = False  # Audio doesn't need fallback
+                
+                # Set timeline duration
+                self.timeline_widget.set_duration(actual_audio_duration)
+                self.position_slider.setRange(0, duration_ms)
+                
+                # Update loading progress
+                parent = self.parent()
+                while parent and not isinstance(parent, QMainWindow):
+                    parent = parent.parent()
+                if parent and hasattr(parent, 'update_loading_progress_with_step'):
+                    parent.update_loading_progress_with_step("Audio ready!", 4)
+                
+                return
+            
             print("Setting up multi-threaded video playback...")
             
             # First get the actual audio duration for accurate timeline sync
@@ -4871,6 +5217,11 @@ class InteractiveVideoPlayer(QWidget):
             
     def on_position_changed(self, position):
         """Handle position changes from media player"""
+        # Handle audio preview mode
+        if hasattr(self, 'is_audio_only') and self.is_audio_only and hasattr(self, 'audio_preview_active') and self.audio_preview_active:
+            self.handle_audio_preview_position(position)
+            return
+            
         if not self.slider_pressed:
             self.position_slider.setValue(position)
             
@@ -4906,7 +5257,16 @@ class InteractiveVideoPlayer(QWidget):
     def on_slider_released(self):
         """Handle when position slider is released"""
         self.slider_pressed = False
-        self.media_player.setPosition(self.position_slider.value())
+        
+        # Handle audio preview mode seeking
+        if hasattr(self, 'is_audio_only') and self.is_audio_only and hasattr(self, 'audio_preview_active') and self.audio_preview_active:
+            preview_time_ms = self.position_slider.value()
+            preview_time_s = preview_time_ms / 1000.0
+            original_time_s = self.convert_preview_to_original_time(preview_time_s)
+            original_time_ms = int(original_time_s * 1000)
+            self.media_player.setPosition(original_time_ms)
+        else:
+            self.media_player.setPosition(self.position_slider.value())
         
     def on_slider_moved(self, position):
         """Handle when position slider is moved"""
@@ -4979,22 +5339,26 @@ class InteractiveVideoPlayer(QWidget):
     def on_timeline_selection_changed(self, changed_part):
         """Handle selection changes from timeline"""
         # Update preview mode in real-time when selections change
-        if self.preview_mode and hasattr(self, 'video_thread') and self.video_thread:
-            # Recalculate preview segments with new selection
-            self.video_thread.set_preview_mode(True, self.silent_parts)
-            self.preview_duration = self.video_thread.preview_duration
+        if self.preview_mode:
+            if hasattr(self, 'video_thread') and self.video_thread:
+                # Video file preview mode
+                self.video_thread.set_preview_mode(True, self.silent_parts)
+                self.preview_duration = self.video_thread.preview_duration
+            elif hasattr(self, 'is_audio_only') and self.is_audio_only:
+                # Audio file preview mode
+                self.setup_audio_preview_mode()
             
             # DON'T update timeline preview mode - timeline should always show original duration
             # Only update the video thread for playback behavior
             
             # Update position slider range for new preview duration
-            if self.preview_duration > 0:
+            if hasattr(self, 'preview_duration') and self.preview_duration > 0:
                 self.position_slider.setRange(0, int(self.preview_duration * 1000))
                 
             # Update time label to reflect new duration
             self.update_time_label_display()
             
-            print(f"🔄 Preview mode updated: {len([p for p in self.silent_parts if p['selected']])} selected regions, new duration: {self.preview_duration:.1f}s")
+            print(f"🔄 Preview mode updated: {len([p for p in self.silent_parts if p['selected']])} selected regions, new duration: {getattr(self, 'preview_duration', 0):.1f}s")
         
         self.selection_changed.emit(changed_part)
     
@@ -5022,14 +5386,20 @@ class InteractiveVideoPlayer(QWidget):
         self.timeline_widget.update()
         
         # Update preview mode in real-time
-        if self.preview_mode and hasattr(self, 'video_thread') and self.video_thread:
-            self.video_thread.set_preview_mode(True, self.silent_parts)
-            self.preview_duration = self.video_thread.preview_duration
+        if self.preview_mode:
+            if hasattr(self, 'video_thread') and self.video_thread:
+                # Video file preview mode
+                self.video_thread.set_preview_mode(True, self.silent_parts)
+                self.preview_duration = self.video_thread.preview_duration
+            elif hasattr(self, 'is_audio_only') and self.is_audio_only:
+                # Audio file preview mode
+                self.setup_audio_preview_mode()
+            
             # DON'T update timeline preview mode - timeline should always show original duration
-            if self.preview_duration > 0:
+            if hasattr(self, 'preview_duration') and self.preview_duration > 0:
                 self.position_slider.setRange(0, int(self.preview_duration * 1000))
             self.update_time_label_display()
-            print(f"🔄 New duration: {self.preview_duration:.1f}s")
+            print(f"🔄 New duration: {getattr(self, 'preview_duration', 0):.1f}s")
         
         self.selection_changed.emit({})
         
@@ -5115,22 +5485,173 @@ class InteractiveVideoPlayer(QWidget):
         self.preview_mode = True
         
         if hasattr(self, 'video_thread') and self.video_thread:
+            # Video file preview mode
             self.video_thread.set_preview_mode(True, self.silent_parts)
             # Connect preview position signal
             self.video_thread.preview_position_changed.connect(self.update_preview_position)
             self.preview_duration = self.video_thread.preview_duration
+        elif hasattr(self, 'is_audio_only') and self.is_audio_only:
+            # Audio file preview mode
+            self.setup_audio_preview_mode()
             
         # DON'T set timeline to preview mode - timeline should always show original duration
         # Only the video playback behavior should be affected by preview mode
         
         # Update position slider range for preview duration
-        if self.preview_duration > 0:
+        if hasattr(self, 'preview_duration') and self.preview_duration > 0:
             self.position_slider.setRange(0, int(self.preview_duration * 1000))
             
-        print(f"✓ Preview mode enabled automatically. Original: {getattr(self, 'actual_duration_seconds', 0):.1f}s → Preview: {self.preview_duration:.1f}s")
+        print(f"✓ Preview mode enabled automatically. Original: {getattr(self, 'actual_duration_seconds', 0):.1f}s → Preview: {getattr(self, 'preview_duration', 0):.1f}s")
         
         # Update time label immediately
         self.update_time_label_display()
+        
+    def setup_audio_preview_mode(self):
+        """Set up preview mode for audio files using QMediaPlayer"""
+        if not self.silent_parts:
+            return
+            
+        # Calculate preview segments (non-silent parts)
+        self.audio_preview_segments = []
+        selected_silent_parts = [part for part in self.silent_parts if part['selected']]
+        
+        if not selected_silent_parts:
+            # No silent parts selected, preview is same as original
+            self.preview_duration = getattr(self, 'actual_duration_seconds', 0)
+            return
+            
+        # Sort silent parts by start time
+        selected_silent_parts.sort(key=lambda x: x['start'])
+        
+        # Create segments between silent parts
+        current_time = 0.0
+        preview_time = 0.0
+        
+        for silent_part in selected_silent_parts:
+            # Add segment before this silent part
+            if current_time < silent_part['start']:
+                segment_duration = silent_part['start'] - current_time
+                self.audio_preview_segments.append({
+                    'original_start': current_time,
+                    'original_end': silent_part['start'],
+                    'preview_start': preview_time,
+                    'preview_end': preview_time + segment_duration,
+                    'duration': segment_duration
+                })
+                preview_time += segment_duration
+            
+            # Skip the silent part
+            current_time = silent_part['end']
+        
+        # Add final segment after last silent part
+        total_duration = getattr(self, 'actual_duration_seconds', 0)
+        if current_time < total_duration:
+            segment_duration = total_duration - current_time
+            self.audio_preview_segments.append({
+                'original_start': current_time,
+                'original_end': total_duration,
+                'preview_start': preview_time,
+                'preview_end': preview_time + segment_duration,
+                'duration': segment_duration
+            })
+            preview_time += segment_duration
+        
+        self.preview_duration = preview_time
+        
+        # Set up audio preview tracking
+        self.audio_preview_active = True
+        self.current_preview_segment = None
+        self.preview_start_time = None
+        
+        print(f"🎵 Audio preview mode set up: {len(self.audio_preview_segments)} segments, total duration: {self.preview_duration:.1f}s")
+        
+    def convert_preview_to_original_time(self, preview_time):
+        """Convert preview time to original time for audio files"""
+        if not hasattr(self, 'audio_preview_segments') or not self.audio_preview_segments:
+            return preview_time
+            
+        # Find which segment this preview time belongs to
+        for segment in self.audio_preview_segments:
+            if segment['preview_start'] <= preview_time <= segment['preview_end']:
+                # Calculate offset within the segment
+                offset = preview_time - segment['preview_start']
+                return segment['original_start'] + offset
+                
+        # If not found in any segment, return the closest boundary
+        if preview_time < self.audio_preview_segments[0]['preview_start']:
+            return self.audio_preview_segments[0]['original_start']
+        else:
+            return self.audio_preview_segments[-1]['original_end']
+            
+    def convert_original_to_preview_time(self, original_time):
+        """Convert original time to preview time for audio files"""
+        if not hasattr(self, 'audio_preview_segments') or not self.audio_preview_segments:
+            return original_time
+            
+        # Find which segment this original time belongs to
+        for segment in self.audio_preview_segments:
+            if segment['original_start'] <= original_time <= segment['original_end']:
+                # Calculate offset within the segment
+                offset = original_time - segment['original_start']
+                return segment['preview_start'] + offset
+                
+        # If in a silent part, find the nearest segment boundary
+        preview_time = 0.0
+        for segment in self.audio_preview_segments:
+            if original_time < segment['original_start']:
+                return preview_time
+            elif original_time <= segment['original_end']:
+                offset = original_time - segment['original_start']
+                return segment['preview_start'] + offset
+            preview_time = segment['preview_end']
+            
+        return preview_time
+        
+    def handle_audio_preview_position(self, position_ms):
+        """Handle position updates during audio preview mode"""
+        original_time_s = position_ms / 1000.0
+        
+        # Check if we're in a silent part that should be skipped
+        if hasattr(self, 'audio_preview_segments') and self.audio_preview_segments:
+            # Find if current position is in a non-silent segment
+            current_segment = None
+            for segment in self.audio_preview_segments:
+                if segment['original_start'] <= original_time_s <= segment['original_end']:
+                    current_segment = segment
+                    break
+            
+            if current_segment:
+                # We're in a valid segment, update preview position
+                offset = original_time_s - current_segment['original_start']
+                preview_time_s = current_segment['preview_start'] + offset
+                preview_time_ms = int(preview_time_s * 1000)
+                
+                if not self.slider_pressed:
+                    self.position_slider.setValue(preview_time_ms)
+                
+                # Update time label with preview time
+                current_time = self.format_time_simple(preview_time_s)
+                total_time = self.format_time_simple(self.preview_duration)
+                self.time_label.setText(f"{current_time} / {total_time}")
+                
+                # Update timeline position (convert to original time for timeline)
+                self.timeline_widget.set_position(original_time_s, instant=False)
+                
+            else:
+                # We're in a silent part, skip to next non-silent segment
+                next_segment = None
+                for segment in self.audio_preview_segments:
+                    if segment['original_start'] > original_time_s:
+                        next_segment = segment
+                        break
+                
+                if next_segment:
+                    # Jump to the start of the next segment
+                    next_position_ms = int(next_segment['original_start'] * 1000)
+                    self.media_player.setPosition(next_position_ms)
+                else:
+                    # No more segments, stop playback
+                    self.media_player.pause()
 
 class LoadingOverlay(QWidget):
     """Beautiful loading overlay with animated spinner"""
@@ -5291,6 +5812,7 @@ class SilenceCutterApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.video_path = None
+        self.is_audio_only = False
         self.silent_parts = []
         self.silent_ranges = []
         
@@ -5300,7 +5822,7 @@ class SilenceCutterApp(QMainWindow):
         self.setup_ui()
         
     def setup_ui(self):
-        self.setWindowTitle("🎬 Video Silence Cutter")
+        self.setWindowTitle("🎬 Media Silence Cutter")
         self.setMinimumWidth(1200)
         self.setMinimumHeight(800)
         
@@ -5420,7 +5942,7 @@ class SilenceCutterApp(QMainWindow):
             }
         """)
         
-        app_title = QLabel("Video Silence Cutter")
+        app_title = QLabel("Media Silence Cutter")
         app_title.setStyleSheet("""
             QLabel {
                 font-size: 24px;
@@ -5449,7 +5971,7 @@ class SilenceCutterApp(QMainWindow):
         help_btn.setMaximumHeight(40)
         
         # Export button (moved from processing status section)
-        self.export_btn = QPushButton("📤 Export Processed Video")
+        self.export_btn = QPushButton("📤 Export Processed Media")
         self.export_btn.setEnabled(False)
         self.export_btn.clicked.connect(self.process_video)
         self.export_btn.setMinimumHeight(40)
@@ -5520,7 +6042,7 @@ class SilenceCutterApp(QMainWindow):
         file_section.setSpacing(8)
         
         file_header = QHBoxLayout()
-        file_label_title = QLabel("Select Video")
+        file_label_title = QLabel("Select Media File")
         file_label_title.setStyleSheet("""
             QLabel {
                 font-size: 14px;
@@ -5529,7 +6051,7 @@ class SilenceCutterApp(QMainWindow):
             }
         """)
         
-        self.file_name_label = QLabel("13.mp4")
+        self.file_name_label = QLabel("No file selected")
         self.file_name_label.setStyleSheet("""
             QLabel {
                 font-size: 12px;
@@ -5918,49 +6440,76 @@ class SilenceCutterApp(QMainWindow):
         value = self.padding_slider.value()
         self.padding_value_label.setText(f"{value}")
     
+    def is_audio_file(self, file_path):
+        """Check if the file is an audio-only file based on extension"""
+        audio_extensions = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'}
+        file_ext = os.path.splitext(file_path)[1].lower()
+        return file_ext in audio_extensions
+    
     def select_video(self):
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Select Video", "", "Video Files (*.mp4 *.avi *.mkv *.mov *.wmv)"
+            self, "Select Media File", "", 
+            "All Supported Files (*.mp4 *.avi *.mkv *.mov *.wmv *.mp3 *.wav *.flac *.aac *.ogg *.m4a);;Video Files (*.mp4 *.avi *.mkv *.mov *.wmv);;Audio Files (*.mp3 *.wav *.flac *.aac *.ogg *.m4a)"
         )
         
         if file_path:
-            # Show loading overlay immediately with enhanced tracking
-            self.show_loading_overlay("Loading Video...")
+            # Check if this is an audio file
+            is_audio = self.is_audio_file(file_path)
+            
+            # Show loading overlay with appropriate message
+            if is_audio:
+                self.show_loading_overlay("Loading Audio...")
+            else:
+                self.show_loading_overlay("Loading Video...")
             
             # Initialize loading progress tracking
             self.loading_start_time = time.time()
             self.loading_steps_completed = 0
-            self.total_loading_steps = 6  # Total expected steps
+            self.total_loading_steps = 4 if is_audio else 6  # Fewer steps for audio
             
             # Get file size for better time estimation
             try:
                 file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-                self.estimated_total_time = max(5, min(30, file_size_mb * 0.5))  # Rough estimate: 0.5 seconds per MB, 5-30 second range
+                # Audio files load faster than video files
+                time_multiplier = 0.2 if is_audio else 0.5
+                self.estimated_total_time = max(3, min(20, file_size_mb * time_multiplier))
                 print(f"📁 File size: {file_size_mb:.1f} MB, estimated loading time: {self.estimated_total_time:.0f}s")
             except:
-                self.estimated_total_time = 15  # Default estimate
+                self.estimated_total_time = 10 if is_audio else 15  # Default estimate
             
             # Clear previous data first
             self.clear_previous_data()
             
             self.video_path = file_path
+            self.is_audio_only = is_audio
             file_name = os.path.basename(file_path)
             self.file_label.setText(file_name)
             self.detect_btn.setEnabled(True)
             self.silent_parts = []
             self.process_btn.setEnabled(False)
             
-            # Update loading message with step tracking
-            self.update_loading_progress_with_step("Initializing video player...", 1)
-            
-            # Load video into the player
-            self.video_player.load_video(file_path)
-            
-            # Enable performance optimizations immediately
-            self.enable_performance_optimizations()
-            
-            # Extended fallback timer - only hide if something goes wrong
-            QTimer.singleShot(30000, self.hide_loading_overlay_fallback)  # 30 seconds instead of 3
+            if is_audio:
+                # For audio files, load into video player for playback controls
+                self.update_loading_progress_with_step("Setting up audio player...", 1)
+                self.video_player.load_video(file_path)  # This will detect audio and call load_audio_only
+                
+                # Enable performance optimizations immediately
+                self.enable_performance_optimizations()
+                
+                # Extended fallback timer - only hide if something goes wrong
+                QTimer.singleShot(30000, self.hide_loading_overlay_fallback)  # 30 seconds instead of 3
+            else:
+                # Update loading message with step tracking
+                self.update_loading_progress_with_step("Initializing video player...", 1)
+                
+                # Load video into the player
+                self.video_player.load_video(file_path)
+                
+                # Enable performance optimizations immediately
+                self.enable_performance_optimizations()
+                
+                # Extended fallback timer - only hide if something goes wrong
+                QTimer.singleShot(30000, self.hide_loading_overlay_fallback)  # 30 seconds instead of 3
     
     def update_loading_progress_with_step(self, message, step_number=None):
         """Update loading progress with step tracking and time estimation"""
@@ -6179,12 +6728,26 @@ class SilenceCutterApp(QMainWindow):
             QMessageBox.warning(self, "No Selection", "Please select at least one silent region to process.")
             return
         
-        # Get output file path
+        # Check if this is an audio file
+        is_audio = getattr(self, 'is_audio_only', False)
+        
+        # Get output file path with appropriate filter
         base_name = os.path.splitext(os.path.basename(self.video_path))[0]
-        output_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Processed Video", f"{base_name}_silences_removed.mp4", 
-            "Video Files (*.mp4)"
-        )
+        
+        if is_audio:
+            # For audio files, preserve the original format or allow format selection
+            original_ext = os.path.splitext(self.video_path)[1]
+            default_name = f"{base_name}_silences_removed{original_ext}"
+            output_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Processed Audio", default_name,
+                "Audio Files (*.mp3 *.wav *.flac *.aac *.ogg *.m4a);;MP3 Files (*.mp3);;WAV Files (*.wav);;FLAC Files (*.flac);;AAC Files (*.aac);;OGG Files (*.ogg);;M4A Files (*.m4a)"
+            )
+        else:
+            # For video files
+            output_path, _ = QFileDialog.getSaveFileName(
+                self, "Save Processed Video", f"{base_name}_silences_removed.mp4", 
+                "Video Files (*.mp4)"
+            )
         
         if not output_path:
             return
@@ -6193,25 +6756,34 @@ class SilenceCutterApp(QMainWindow):
         self.process_btn.setEnabled(False)
         self.detect_btn.setEnabled(False)
         
-        # Show processing modal
-        self.show_processing_modal("Processing Video", "Removing silent regions from video...")
+        # Show processing modal with appropriate message
+        if is_audio:
+            self.show_processing_modal("Processing Audio", "Removing silent regions from audio...")
+        else:
+            self.show_processing_modal("Processing Video", "Removing silent regions from video...")
         
         # Initialize processing timing
         self.processing_start_time = time.time()
         try:
             file_size_mb = os.path.getsize(self.video_path) / (1024 * 1024)
-            self.processing_estimated_time = max(30, min(300, file_size_mb * 5))  # Rough estimate: 5 seconds per MB, 30-300 second range
-            print(f"📁 Processing {file_size_mb:.1f} MB file, estimated time: {self.processing_estimated_time:.0f}s")
+            # Audio processing is generally faster than video processing
+            time_multiplier = 2 if is_audio else 5
+            self.processing_estimated_time = max(15 if is_audio else 30, min(120 if is_audio else 300, file_size_mb * time_multiplier))
+            print(f"📁 Processing {file_size_mb:.1f} MB {'audio' if is_audio else 'video'} file, estimated time: {self.processing_estimated_time:.0f}s")
         except:
-            self.processing_estimated_time = 60  # Default estimate
+            self.processing_estimated_time = 30 if is_audio else 60  # Default estimate
         
         # Start real-time countdown timer for processing
         self.processing_timer = QTimer()
         self.processing_timer.timeout.connect(self.update_processing_countdown)
         self.processing_timer.start(1000)  # Update every second
         
-        # Start the processing thread
-        self.processing_thread = ProcessingThread(self.video_path, selected_parts, output_path)
+        # Start the appropriate processing thread
+        if is_audio:
+            self.processing_thread = AudioProcessingThread(self.video_path, selected_parts, output_path)
+        else:
+            self.processing_thread = ProcessingThread(self.video_path, selected_parts, output_path)
+        
         self.processing_thread.progress_updated.connect(self.update_processing_progress)
         self.processing_thread.processing_complete.connect(self.show_processing_results)
         self.processing_thread.start()
@@ -6425,6 +6997,7 @@ class SilenceCutterApp(QMainWindow):
         try:
             # Reset video path and silent parts
             self.video_path = None
+            self.is_audio_only = False
             self.silent_parts = []
             self.silent_ranges = []
             
