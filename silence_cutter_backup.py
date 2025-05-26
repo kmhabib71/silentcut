@@ -1781,29 +1781,15 @@ class ProcessingThread(QThread):
                 if current_time - self.last_update_time >= 1.0:  # Update every second
                     self.last_update_time = current_time
                     
-                    # Estimate progress based on elapsed time and video duration
-                    if hasattr(self, '_video_duration') and self._video_duration > 0:
-                        # Estimate total processing time (typically 2-3x video duration)
-                        estimated_total_time = self._video_duration * 2.5
-                        time_based_progress = (elapsed_total / estimated_total_time) * 95
-                        time_based_progress = min(95, max(self.last_progress, time_based_progress))
-                        
-                        # Use smooth progression towards estimated progress
-                        if time_based_progress > self.last_progress:
-                            self.last_progress = time_based_progress
-                        else:
-                            # Fallback gentle increment
-                            increment = 0.5 if self.last_progress < 70 else 0.3
-                            self.last_progress = min(95, self.last_progress + increment)
-                    else:
-                        # Fallback time-based increments
-                        if elapsed_total < 60:
-                            increment = 1.0
-                        elif elapsed_total < 180:
-                            increment = 0.6
-                        else:
-                            increment = 0.3
-                        self.last_progress = min(95, self.last_progress + increment)
+                    # More realistic progress increments
+                    if elapsed_total < 60:  # First minute
+                        increment = 0.8
+                    elif elapsed_total < 180:  # Next 2 minutes
+                        increment = 0.4
+                    else:  # After 3 minutes, very slow
+                        increment = 0.1
+                    
+                    self.last_progress = min(98, self.last_progress + increment)
                     self.progress_updated.emit(int(self.last_progress))
                     QApplication.processEvents()  # Process UI events
             
@@ -1870,13 +1856,9 @@ class ProcessingThread(QThread):
                 
                 # Verify the output file was created successfully
                 if os.path.exists(self.output_path):
-                    # Get file size for reporting (but don't block on it)
-                    try:
-                        file_size = os.path.getsize(self.output_path)
-                        print(f"MoviePy processing completed successfully")
-                        print(f"Output file size: {file_size / (1024*1024):.1f} MB")
-                    except:
-                        print(f"MoviePy processing completed successfully")
+                    file_size = os.path.getsize(self.output_path)
+                    print(f"MoviePy processing completed successfully")
+                    print(f"Output file size: {file_size / (1024*1024):.1f} MB")
                 else:
                     raise RuntimeError("Output file was not created by MoviePy")
                     
@@ -1894,11 +1876,9 @@ class ProcessingThread(QThread):
                 except Exception as cleanup_error:
                     print(f"Error during cleanup: {str(cleanup_error)}")
             
-            # Smooth transition to completion
-            for progress in [96, 97, 98, 99, 100]:
-                self.progress_updated.emit(progress)
-                QApplication.processEvents()
-                time.sleep(0.02)  # Very brief pause for smooth animation
+            # Final progress update - ensure we reach 100%
+            self.progress_updated.emit(100)
+            QApplication.processEvents()
             
             self.processing_complete.emit(self.output_path)
             
@@ -2129,7 +2109,7 @@ class ProcessingThread(QThread):
                                     
                                     # Calculate progress based on video duration
                                     if hasattr(self, '_video_duration') and self._video_duration > 0:
-                                        progress_percent = min(99, (current_time_seconds / self._video_duration) * 100)
+                                        progress_percent = min(98, (current_time_seconds / self._video_duration) * 100)
                                         if progress_percent > current_progress:
                                             current_progress = progress_percent
                                             self.progress_updated.emit(int(current_progress))
@@ -2160,62 +2140,20 @@ class ProcessingThread(QThread):
                         process.kill()
                     break
                 
-                # Parse FFmpeg output for real progress
-                progress_updated = False
-                if output_lines:
-                    latest_output = output_lines[-1] if output_lines else ""
+                # Update progress more gradually and realistically
+                if current_time - last_progress_time >= 1.0:  # Update every second
+                    # More conservative progress estimation
+                    if elapsed < 30:  # First 30 seconds
+                        progress_increment = 1
+                    elif elapsed < 60:  # Next 30 seconds
+                        progress_increment = 0.5
+                    else:  # After 1 minute, very slow progress
+                        progress_increment = 0.2
                     
-                    # Look for time information in FFmpeg output
-                    if "time=" in latest_output:
-                        try:
-                            time_match = latest_output.split("time=")[1].split()[0]
-                            time_parts = time_match.split(":")
-                            if len(time_parts) == 3:
-                                current_time_seconds = (
-                                    float(time_parts[0]) * 3600 + 
-                                    float(time_parts[1]) * 60 + 
-                                    float(time_parts[2])
-                                )
-                                if self._video_duration > 0:
-                                    # Calculate real progress (0-95% based on actual processing)
-                                    real_progress = (current_time_seconds / self._video_duration) * 95
-                                    real_progress = max(current_progress, min(95, real_progress))
-                                    
-                                    if real_progress > current_progress + 0.3:  # Update more frequently
-                                        current_progress = real_progress
-                                        self.progress_updated.emit(int(current_progress))
-                                        QApplication.processEvents()
-                                        last_progress_time = current_time
-                                        progress_updated = True
-                        except:
-                            pass
-                
-                # More aggressive fallback progress if no FFmpeg time detected
-                if not progress_updated and current_time - last_progress_time >= 1.0:  # Update every second
-                    # Estimate progress based on elapsed time vs expected total time
-                    if self._video_duration > 0:
-                        # Assume processing takes roughly 1.5-2x the video duration
-                        estimated_total_time = self._video_duration * 1.8
-                        time_based_progress = (elapsed / estimated_total_time) * 95
-                        time_based_progress = min(95, max(current_progress, time_based_progress))
-                        
-                        if time_based_progress > current_progress:
-                            current_progress = time_based_progress
-                            self.progress_updated.emit(int(current_progress))
-                            QApplication.processEvents()
-                            last_progress_time = current_time
-                            progress_updated = True
-                    
-                    # Final fallback: steady increments
-                    if not progress_updated:
-                        increment = 1.0 if current_progress < 70 else 0.5
-                        new_progress = min(95, current_progress + increment)
-                        
-                        if new_progress > current_progress:
-                            current_progress = new_progress
-                            self.progress_updated.emit(int(current_progress))
-                            QApplication.processEvents()
-                            last_progress_time = current_time
+                    current_progress = min(98, current_progress + progress_increment)
+                    self.progress_updated.emit(int(current_progress))
+                    QApplication.processEvents()
+                    last_progress_time = current_time
             
                 time.sleep(0.5)  # Check every 500ms instead of 100ms
             
@@ -2228,30 +2166,20 @@ class ProcessingThread(QThread):
                 all_output += '\n' + stdout
             
             if process.returncode == 0:
-                # Check if output file was actually created
+                # Check if output file was actually created and has reasonable size
                 if os.path.exists(self.output_path):
-                    # Smooth transition to completion
-                    for progress in [96, 97, 98, 99, 100]:
-                        self.progress_updated.emit(progress)
+                    file_size = os.path.getsize(self.output_path)
+                    if file_size > 1024:  # At least 1KB
+                        self.progress_updated.emit(100)
                         QApplication.processEvents()
-                        time.sleep(0.02)  # Very brief pause for smooth animation
-                    
-                    # Get file size for reporting (but don't block on it)
-                    try:
-                        file_size = os.path.getsize(self.output_path)
-                        if file_size <= 1024:  # Less than 1KB is suspicious
-                            print(f"Warning: Output file is very small ({file_size} bytes)")
-                    except:
-                        file_size = 0  # If we can't get size, continue anyway
-                    
-                    elapsed_total = time.time() - start_time
-                    if file_size > 0:
+                        elapsed_total = time.time() - start_time
                         print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
                         print(f"Output file size: {file_size / (1024*1024):.1f} MB")
+                        print(f"---------- HARDWARE-ACCELERATED FFMPEG PROCESSING END ----------\n")
+                        return self.output_path
                     else:
-                        print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
-                    print(f"---------- HARDWARE-ACCELERATED FFMPEG PROCESSING END ----------\n")
-                    return self.output_path
+                        print(f"Output file created but is too small ({file_size} bytes), likely an error")
+                        return ""
                 else:
                     print("Output file was not created, FFmpeg may have failed silently")
                     return ""
@@ -2716,7 +2644,7 @@ class TimelineWidget(QWidget):
         if position_seconds >= 0:
             time_str = self.format_time_mmss_ms(position_seconds)
             self.setToolTip(f"Playhead: {time_str}")
-        else:
+            else:
             self.setToolTip("")
             
         self.update()  # Trigger immediate repaint for instant updates
@@ -2779,7 +2707,7 @@ class TimelineWidget(QWidget):
         # no conversion is needed - the click is already in original time coordinates
         print(f"🎯 TIMELINE CLICK (No Conversion Needed):")
         print(f"  Click position: {click_time_seconds:.3f}s (already in original timeline)")
-        return click_time_seconds
+            return click_time_seconds
         
     def original_time_to_preview_time(self, original_time):
         """Convert original video time to preview timeline position"""
@@ -5365,14 +5293,6 @@ class SilenceCutterApp(QMainWindow):
             self.progress_bar.setFormat(f"Processing video... {progress}%")
     
     def show_processing_results(self, output_path):
-        # Ensure progress reaches 100% before showing results
-        self.progress_bar.setValue(100)
-        QApplication.processEvents()
-        
-        # Brief pause to ensure 100% is visible
-        import time
-        time.sleep(0.1)
-        
         # Stop the countdown timer and reset variables
         if hasattr(self, 'processing_timer'):
             self.processing_timer.stop()
@@ -5381,14 +5301,10 @@ class SilenceCutterApp(QMainWindow):
         if hasattr(self, 'processing_last_update'):
             delattr(self, 'processing_last_update')
             
-        # Hide progress bar and reset UI IMMEDIATELY so user sees completion
         self.progress_bar.setVisible(False)
         self.progress_bar.setFormat("%p%")  # Reset to default format
         self.process_btn.setEnabled(True)
         self.detect_btn.setEnabled(True)
-        
-        # Force UI update to show the changes immediately
-        QApplication.processEvents()
         
         if output_path:
             # Check if hardware acceleration was used (look for indicators in console output)
@@ -5399,7 +5315,7 @@ class SilenceCutterApp(QMainWindow):
                 hw_message = "\n\n🚀 Hardware acceleration was used for faster processing!"
             except:
                 pass
-            
+                
             QMessageBox.information(
                 self,
                 "Processing Complete",
@@ -5424,15 +5340,15 @@ class SilenceCutterApp(QMainWindow):
                 self.processing_thread.terminate()
                 self.processing_thread.wait(1000)
             
-            
-            # Clean up video player resources
-            if hasattr(self, "video_player"):
-                self.video_player.cleanup_fallback_resources()
+        # Clean up video player resources
+        if hasattr(self, 'video_player'):
+            self.video_player.cleanup_fallback_resources()
                 
             # Clean up circular buffers and caches
             self.cleanup_buffers()
         except Exception as e:
             print(f"Error during cleanup: {e}")
+        
         super().closeEvent(event)
         
     def cleanup_buffers(self):
