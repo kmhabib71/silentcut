@@ -792,18 +792,23 @@ class VideoPlaybackThread(QThread):
         return getattr(self, '_cached_target_frame', initial_frame)
 
     def process_frame_fast(self, frame):
-        """Process frame with maximum speed optimization"""
+        """Process frame with balanced quality and performance"""
         try:
-            # More aggressive scaling for performance
+            # Balance between quality and performance
             height, width = frame.shape[:2]
+            original_size = f"{width}x{height}"
             
-            # Scale to max 480 width for even faster processing
-            if width > 480:
-                scale = 480 / width
+            # Scale to reasonable size that maintains quality but improves performance
+            # Use 720p as target for good quality while still being performant
+            target_width = 1280  # 720p width
+            if width > target_width:
+                scale = target_width / width
                 new_width = int(width * scale)
                 new_height = int(height * scale)
-                # Use fastest interpolation
-                frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_NEAREST)
+                # Use better interpolation for quality
+                frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+                # Scaling applied for performance
+                pass
             
             # Convert BGR to RGB (OpenCV uses BGR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -2764,9 +2769,9 @@ class TimelineWidget(QWidget):
         self.update()
         
     def get_effective_duration(self):
-        """Get the effective timeline duration (preview duration in preview mode, original otherwise)"""
-        if self.preview_mode and hasattr(self, 'preview_timeline_duration') and self.preview_timeline_duration is not None:
-            return self.preview_timeline_duration
+        """Get the effective timeline duration - ALWAYS return original duration for timeline display"""
+        # The timeline should ALWAYS show the complete original duration
+        # Preview mode only affects playback behavior, not the visual timeline
         return self.duration_seconds
         
     def convert_click_position_to_original_time(self, click_time_seconds):
@@ -2835,20 +2840,16 @@ class TimelineWidget(QWidget):
         
     def get_original_visible_time_range(self):
         """Get the visible time range in original timeline coordinates (for waveform and silence regions)"""
-        if self.preview_mode:
-            # In preview mode, calculate visible range based on original timeline
-            original_duration = self.duration_seconds
-            visible_duration = original_duration / self.zoom_level
-            start_time = self.zoom_offset * original_duration
-            end_time = start_time + visible_duration
-            
-            # Ensure we don't go beyond the original duration
-            start_time = max(0, start_time)
-            end_time = min(original_duration, end_time)
-            return start_time, end_time
-        else:
-            # Normal mode: use the regular visible time range
-            return self.get_visible_time_range()
+        # ALWAYS use original timeline coordinates since the timeline always shows the original duration
+        original_duration = self.duration_seconds
+        visible_duration = original_duration / self.zoom_level
+        start_time = self.zoom_offset * original_duration
+        end_time = start_time + visible_duration
+        
+        # Ensure we don't go beyond the original duration
+        start_time = max(0, start_time)
+        end_time = min(original_duration, end_time)
+        return start_time, end_time
         
     def time_to_x(self, time_seconds, timeline_rect):
         """Convert time to X coordinate considering zoom and offset"""
@@ -2887,10 +2888,12 @@ class TimelineWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Draw background
-        painter.fillRect(self.rect(), QColor(245, 245, 245))
+        # Draw modern dark background
+        painter.fillRect(self.rect(), QColor(31, 41, 55))  # Dark gray background
         
         if self.duration_seconds <= 0:
+            painter.setPen(QPen(QColor(156, 163, 175), 1))  # Light gray text
+            painter.setFont(QFont("Segoe UI", 14))
             painter.drawText(self.rect(), Qt.AlignCenter, "No video loaded")
             return
             
@@ -2905,9 +2908,9 @@ class TimelineWidget(QWidget):
         # Draw waveform background
         self.draw_waveform(painter, timeline_rect)
         
-        # Draw timeline border
-        painter.setPen(QPen(QColor(100, 100, 100), 2))
-        painter.drawRect(timeline_rect)
+        # Draw modern timeline border
+        painter.setPen(QPen(QColor(75, 85, 99), 2))  # Subtle border
+        painter.drawRoundedRect(timeline_rect, 4, 4)
         
         # Get visible time range for silence regions (always use original timeline)
         original_start_time, original_end_time = self.get_original_visible_time_range()
@@ -2929,16 +2932,16 @@ class TimelineWidget(QWidget):
             end_x = self.original_time_to_x(end_sec, timeline_rect)
             width = end_x - start_x
             
-            # Choose color based on selection state
+            # Choose modern colors based on selection state
             part = self.silent_parts[i]
             if part['selected']:
-                color = QColor(220, 60, 60, 180)  # Selected: semi-transparent red
-                border_color = QColor(180, 30, 30)
-                glow_color = QColor(255, 100, 100, 100)
+                color = QColor(239, 68, 68, 180)  # Modern red with transparency
+                border_color = QColor(220, 38, 38)
+                glow_color = QColor(248, 113, 113, 120)
             else:
-                color = QColor(140, 140, 140, 140)  # Unselected: semi-transparent gray
-                border_color = QColor(100, 100, 100)
-                glow_color = QColor(160, 160, 160, 80)
+                color = QColor(107, 114, 128, 140)  # Modern gray with transparency
+                border_color = QColor(75, 85, 99)
+                glow_color = QColor(156, 163, 175, 80)
                 
             # Highlight if hovering
             if self.hover_region == i:
@@ -2979,46 +2982,46 @@ class TimelineWidget(QWidget):
             painter.setPen(QPen(border_color, 1))
             painter.drawRect(right_handle)
             
-            # Draw region label
+            # Draw modern region label
             if width > 30:  # Only draw label if region is wide enough
                 label = f"S{i+1}"
                 painter.setPen(QPen(QColor(255, 255, 255), 1))
-                painter.setFont(QFont("Arial", 9, QFont.Bold))
+                painter.setFont(QFont("Segoe UI", 9, QFont.Bold))
                 painter.drawText(region_rect, Qt.AlignCenter, label)
         
-        # Draw current position indicator (use original timeline coordinates)
+        # Draw modern current position indicator (use original timeline coordinates)
         if original_start_time <= self.current_position <= original_end_time:
             pos_x = self.original_time_to_x(self.current_position, timeline_rect)
             
-            # Draw position line with glow
-            painter.setPen(QPen(QColor(0, 120, 215, 100), 6))
+            # Draw modern position line with glow effect
+            painter.setPen(QPen(QColor(37, 99, 235, 100), 6))  # Blue glow
             painter.drawLine(int(pos_x), int(timeline_rect.top() - 5), int(pos_x), int(timeline_rect.bottom() + 5))
-            painter.setPen(QPen(QColor(0, 120, 215), 3))
+            painter.setPen(QPen(QColor(37, 99, 235), 3))  # Solid blue line
             painter.drawLine(int(pos_x), int(timeline_rect.top() - 5), int(pos_x), int(timeline_rect.bottom() + 5))
             
-            # Draw time indicator above the playhead like in reference image
+            # Draw modern time indicator above the playhead
             time_str = self.format_time_mmss_ms(self.current_position)
-            painter.setFont(QFont("Arial", 8, QFont.Bold))
+            painter.setFont(QFont("Segoe UI", 8, QFont.Bold))
             text_rect = painter.fontMetrics().boundingRect(time_str)
             
-            # Draw time background with full opacity and better styling
-            time_bg_rect = QRectF(pos_x - text_rect.width()/2 - 6, timeline_rect.top() - 38, 
-                                text_rect.width() + 12, text_rect.height() + 8)
-            painter.fillRect(time_bg_rect, QColor(45, 45, 45, 255))  # Fully opaque dark background
-            painter.setPen(QPen(QColor(120, 200, 255), 2))  # Bright blue border
-            painter.drawRect(time_bg_rect)
+            # Draw modern time background with rounded corners
+            time_bg_rect = QRectF(pos_x - text_rect.width()/2 - 8, timeline_rect.top() - 38, 
+                                text_rect.width() + 16, text_rect.height() + 8)
+            painter.fillRect(time_bg_rect, QColor(31, 41, 55, 255))  # Dark background matching theme
+            painter.setPen(QPen(QColor(37, 99, 235), 2))  # Blue border matching position line
+            painter.drawRoundedRect(time_bg_rect, 4, 4)
             
-            # Draw inner shadow for depth
+            # Draw subtle inner glow
             inner_rect = QRectF(time_bg_rect.x() + 1, time_bg_rect.y() + 1, 
                               time_bg_rect.width() - 2, time_bg_rect.height() - 2)
-            painter.setPen(QPen(QColor(80, 80, 80), 1))
-            painter.drawRect(inner_rect)
+            painter.setPen(QPen(QColor(55, 65, 81), 1))
+            painter.drawRoundedRect(inner_rect, 3, 3)
             
             # Draw time text with high contrast
-            painter.setPen(QPen(QColor(255, 255, 255), 1))
+            painter.setPen(QPen(QColor(249, 250, 251), 1))  # Light text
             painter.drawText(int(pos_x - text_rect.width()/2), int(timeline_rect.top() - 22), time_str)
             
-            # Draw position indicator triangle with gradient
+            # Draw modern position indicator triangle with gradient
             triangle_points = [
                 QPointF(pos_x, timeline_rect.top() - 5),
                 QPointF(pos_x - 7, timeline_rect.top() - 17),
@@ -3026,15 +3029,15 @@ class TimelineWidget(QWidget):
             ]
             
             gradient = QLinearGradient(0, timeline_rect.top() - 17, 0, timeline_rect.top() - 5)
-            gradient.setColorAt(0, QColor(0, 150, 255))
-            gradient.setColorAt(1, QColor(0, 100, 200))
+            gradient.setColorAt(0, QColor(37, 99, 235))  # Modern blue
+            gradient.setColorAt(1, QColor(29, 78, 216))  # Darker blue
             painter.setBrush(QBrush(gradient))
-            painter.setPen(QPen(QColor(0, 80, 160), 2))
+            painter.setPen(QPen(QColor(30, 64, 175), 2))  # Dark blue border
             painter.drawPolygon(triangle_points)
         
-        # Draw clean time markers at top like in the reference image
-        painter.setPen(QPen(QColor(220, 220, 220), 1))
-        painter.setFont(QFont("Arial", 9, QFont.Bold))
+        # Draw modern time markers at top
+        painter.setPen(QPen(QColor(156, 163, 175), 1))  # Modern gray
+        painter.setFont(QFont("Segoe UI", 9, QFont.Bold))
         
         # Calculate appropriate marker interval based on zoom (use original timeline)
         visible_duration = (original_end_time - original_start_time)
@@ -3662,49 +3665,249 @@ class InteractiveVideoPlayer(QWidget):
     def setup_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(5)  # Reduce spacing between components
+        layout.setSpacing(0)  # No spacing - video fills container
         
-        # Video player widget - increased height
+        # Video player widget with modern styling - fills available height
         self.video_widget = QVideoWidget()
-        self.video_widget.setMinimumHeight(450)  # Increased from 300
-        self.video_widget.setStyleSheet("background-color: black;")
-        layout.addWidget(self.video_widget)
+        self.video_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)  # Expand in both directions
+        self.video_widget.setAspectRatioMode(Qt.KeepAspectRatio)  # Maintain aspect ratio
+        self.video_widget.setStyleSheet("""
+            QVideoWidget {
+                background-color: #000000;
+                border-radius: 8px;
+                border: 1px solid #374151;
+            }
+        """)
+        layout.addWidget(self.video_widget, 1)  # Stretch to fill available space
         
-        # Timeline widget - more compact frame
-        timeline_frame = QFrame()
-        timeline_frame.setFrameStyle(QFrame.StyledPanel)
-        timeline_frame.setStyleSheet("background-color: #f8f8f8; border: 1px solid #ccc;")
-        timeline_layout = QVBoxLayout(timeline_frame)
-        timeline_layout.setContentsMargins(5, 3, 5, 3)  # Reduce margins
-        timeline_layout.setSpacing(2)  # Reduce spacing
+        self.setLayout(layout)
         
-        # Timeline label - smaller font
-        timeline_label = QLabel("Interactive Timeline - Click regions to toggle, drag edges to adjust (Preview mode auto-enabled)")
-        timeline_label.setFont(QFont("Arial", 9))  # Reduced from 10
-        timeline_label.setAlignment(Qt.AlignCenter)
-        timeline_layout.addWidget(timeline_label)
+        # Create separate timeline section that will be added to splitter
+        self.timeline_section = QFrame()
+        self.timeline_section.setStyleSheet("""
+            QFrame {
+                background-color: #1f2937;
+                border: 1px solid #374151;
+                border-radius: 12px;
+            }
+        """)
         
-        # Custom timeline widget
+        timeline_layout = QVBoxLayout(self.timeline_section)
+        timeline_layout.setSpacing(16)
+        timeline_layout.setContentsMargins(24, 16, 24, 16)
+        
+        # Custom timeline widget (create first so zoom buttons can connect to it)
         self.timeline_widget = TimelineWidget()
         self.timeline_widget.selection_changed.connect(self.on_timeline_selection_changed)
         self.timeline_widget.position_changed.connect(self.seek_to_position)
+        self.timeline_widget.setMinimumHeight(120)
+        
+        # Timeline header with zoom controls (no title)
+        timeline_header = QHBoxLayout()
+        
+        # Zoom controls
+        zoom_controls = QHBoxLayout()
+        zoom_controls.setSpacing(8)
+        
+        self.zoom_in_btn = QPushButton("🔍 Zoom In")
+        self.zoom_in_btn.clicked.connect(self.timeline_widget.zoom_in)
+        self.zoom_in_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                color: #d1d5db;
+                border: 1px solid #4b5563;
+                padding: 6px 12px;
+                border-radius: 16px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+        """)
+        
+        self.zoom_out_btn = QPushButton("🔍 Zoom Out")
+        self.zoom_out_btn.clicked.connect(self.timeline_widget.zoom_out)
+        self.zoom_out_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                color: #d1d5db;
+                border: 1px solid #4b5563;
+                padding: 6px 12px;
+                border-radius: 16px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+        """)
+        
+        zoom_controls.addWidget(self.zoom_in_btn)
+        zoom_controls.addWidget(self.zoom_out_btn)
+        
+        timeline_header.addStretch()
+        timeline_header.addLayout(zoom_controls)
+        
+        timeline_layout.addLayout(timeline_header)
         timeline_layout.addWidget(self.timeline_widget)
         
-        layout.addWidget(timeline_frame)
+        # Timeline controls
+        timeline_controls = QHBoxLayout()
+        timeline_controls.setSpacing(16)
         
-        # Control buttons - keep play/pause, stop, and volume controls visible
-        controls_layout = QHBoxLayout()
-        controls_layout.setSpacing(8)
+        # Playback controls
+        playback_controls = QHBoxLayout()
+        playback_controls.setSpacing(8)
         
-        self.play_pause_btn = QPushButton("Play")
+        self.play_pause_btn = QPushButton("▶️")
         self.play_pause_btn.clicked.connect(self.toggle_play_pause)
         self.play_pause_btn.setEnabled(False)
-        self.play_pause_btn.setMaximumWidth(80)
+        self.play_pause_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 20px;
+                padding: 8px;
+                font-size: 16px;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 40px;
+                max-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6b7280;
+            }
+        """)
         
-        self.stop_btn = QPushButton("Stop")
+        self.stop_btn = QPushButton("⏹️")
         self.stop_btn.clicked.connect(self.stop_video)
         self.stop_btn.setEnabled(False)
-        self.stop_btn.setMaximumWidth(80)
+        self.stop_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                color: #d1d5db;
+                border: 1px solid #4b5563;
+                border-radius: 20px;
+                padding: 8px;
+                font-size: 16px;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 40px;
+                max-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6b7280;
+            }
+        """)
+        
+        # Volume control - properly contained in a box
+        volume_frame = QFrame()
+        volume_frame.setStyleSheet("""
+            QFrame {
+                background-color: #374151;
+                border: 1px solid #4b5563;
+                border-radius: 8px;
+                padding: 4px 8px;
+            }
+        """)
+        
+        volume_layout = QHBoxLayout(volume_frame)
+        volume_layout.setSpacing(8)
+        volume_layout.setContentsMargins(8, 4, 8, 4)
+        
+        volume_label = QLabel("Volume:")
+        volume_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #d1d5db;
+                font-weight: 500;
+                background: transparent;
+                border: none;
+            }
+        """)
+        
+        self.volume_slider = QSlider(Qt.Horizontal)
+        self.volume_slider.setMaximum(100)
+        self.volume_slider.setValue(70)
+        self.volume_slider.setMaximumWidth(120)
+        self.volume_slider.valueChanged.connect(self.set_volume)
+        self.volume_slider.setStyleSheet("""
+            QSlider {
+                background: transparent;
+                border: none;
+            }
+            QSlider::groove:horizontal {
+                border: none;
+                height: 4px;
+                background: #1f2937;
+                border-radius: 2px;
+            }
+            QSlider::handle:horizontal {
+                background: #2563eb;
+                border: none;
+                width: 16px;
+                height: 16px;
+                margin: -6px 0;
+                border-radius: 8px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #1d4ed8;
+            }
+            QSlider::sub-page:horizontal {
+                background: #2563eb;
+                border-radius: 2px;
+            }
+        """)
+        
+        volume_layout.addWidget(volume_label)
+        volume_layout.addWidget(self.volume_slider)
+        
+        playback_controls.addWidget(self.play_pause_btn)
+        playback_controls.addWidget(self.stop_btn)
+        playback_controls.addWidget(volume_frame)
+        
+        # Selection controls
+        selection_controls = QHBoxLayout()
+        selection_controls.setSpacing(8)
+        
+        self.select_all_btn = QPushButton("☑️ Select All Silent Regions")
+        self.select_all_btn.clicked.connect(self.toggle_all_silent_regions)
+        self.select_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                color: #d1d5db;
+                border: 1px solid #4b5563;
+                padding: 6px 12px;
+                border-radius: 16px;
+                font-size: 12px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+        """)
+        
+        selection_controls.addWidget(self.select_all_btn)
+        
+        timeline_controls.addLayout(playback_controls)
+        timeline_controls.addStretch()
+        timeline_controls.addLayout(selection_controls)
+        
+        timeline_layout.addLayout(timeline_controls)
         
         # Position slider (hidden - timeline provides this functionality)
         self.position_slider = QSlider(Qt.Horizontal)
@@ -3712,44 +3915,11 @@ class InteractiveVideoPlayer(QWidget):
         self.position_slider.sliderPressed.connect(self.on_slider_pressed)
         self.position_slider.sliderReleased.connect(self.on_slider_released)
         self.position_slider.sliderMoved.connect(self.on_slider_moved)
-        self.position_slider.hide()  # Hide the time slider
+        self.position_slider.hide()
         
         # Time labels (hidden - timeline shows time)
         self.time_label = QLabel("00:00 / 00:00")
-        self.time_label.setFont(QFont("Arial", 9))
-        self.time_label.setMinimumWidth(120)
-        self.time_label.hide()  # Hide the time label
-        
-        # Volume control - keep visible
-        volume_label = QLabel("Volume:")
-        volume_label.setFont(QFont("Arial", 9))
-        self.volume_slider = QSlider(Qt.Horizontal)
-        self.volume_slider.setMaximum(100)
-        self.volume_slider.setValue(70)
-        self.volume_slider.setMaximumWidth(100)
-        self.volume_slider.valueChanged.connect(self.set_volume)
-        
-        # Selection controls
-        select_all_btn = QPushButton("Select All Silent Regions")
-        select_all_btn.clicked.connect(self.select_all_silent_regions)
-        select_all_btn.setMaximumWidth(150)
-        
-        deselect_all_btn = QPushButton("Deselect All Silent Regions")
-        deselect_all_btn.clicked.connect(self.deselect_all_silent_regions)
-        deselect_all_btn.setMaximumWidth(150)
-        
-        # Add controls to layout
-        controls_layout.addWidget(self.play_pause_btn)
-        controls_layout.addWidget(self.stop_btn)
-        controls_layout.addWidget(volume_label)
-        controls_layout.addWidget(self.volume_slider)
-        controls_layout.addStretch()
-        controls_layout.addWidget(select_all_btn)
-        controls_layout.addWidget(deselect_all_btn)
-        
-        layout.addLayout(controls_layout)
-        
-        self.setLayout(layout)
+        self.time_label.hide()
         
         # Enable keyboard focus to receive key events
         self.setFocusPolicy(Qt.StrongFocus)
@@ -3965,9 +4135,25 @@ class InteractiveVideoPlayer(QWidget):
             self.show_video_error(f"Video preview unavailable: {str(e)}")
             
     def display_threaded_frame(self, pixmap):
-        """Display frame from the video thread"""
+        """Display frame from the video thread with proper scaling to fill container height"""
         if hasattr(self, 'video_frame_label') and pixmap:
-            self.video_frame_label.setPixmap(pixmap)
+            label_size = self.video_frame_label.size()
+            
+            # Scale pixmap to fill the container height while maintaining aspect ratio
+            if label_size.width() > 0 and label_size.height() > 0:
+                # Calculate scaling to fill height (prioritize using full container height)
+                height_scale = label_size.height() / pixmap.height()
+                
+                # Calculate new dimensions based on height scaling
+                new_width = int(pixmap.width() * height_scale)
+                new_height = int(pixmap.height() * height_scale)
+                
+                # Scale the pixmap to fill the container height
+                scaled_pixmap = pixmap.scaled(new_width, new_height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.video_frame_label.setPixmap(scaled_pixmap)
+            else:
+                # Fallback if container size not available yet
+                self.video_frame_label.setPixmap(pixmap)
             
     def update_threaded_position(self, frame_number):
         """Update UI based on current frame from video thread"""
@@ -4085,27 +4271,33 @@ class InteractiveVideoPlayer(QWidget):
             self.time_label.setText(f"{current_time} / {total_time}")
             
     def setup_video_display_label(self):
-        """Set up the video display label that overlays the video widget"""
-        # Create the video frame label as a child of the parent widget to ensure it displays properly
-        # but position it to overlay only the video widget area
-        parent_widget = self.video_widget.parent()
-        
+        """Set up the video display label that replaces the video widget in the layout"""
         if not hasattr(self, 'video_frame_label'):
-            self.video_frame_label = QLabel(parent_widget)
+            # Create the video frame label and add it to the layout instead of overlaying
+            self.video_frame_label = QLabel()
             self.video_frame_label.setAlignment(Qt.AlignCenter)
-            self.video_frame_label.setStyleSheet("background-color: black;")
-            self.video_frame_label.setScaledContents(False)
+            self.video_frame_label.setStyleSheet("""
+                QLabel {
+                    background-color: #000000;
+                    border-radius: 8px;
+                    border: 1px solid #374151;
+                }
+            """)
+            self.video_frame_label.setScaledContents(False)  # Don't force scaling - we'll handle it manually
+            # Ensure the label expands to fill available space
+            self.video_frame_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             
-        # Position the label exactly over the video widget
-        video_widget_geometry = self.video_widget.geometry()
-        self.video_frame_label.setGeometry(video_widget_geometry)
-        self.video_frame_label.show()
-        self.video_frame_label.raise_()
-        
-        print(f"Video display label positioned over video widget: {video_widget_geometry}")
+            # Replace the video widget in the layout with the video frame label
+            layout = self.layout()
+            if layout:
+                # Hide the video widget and add the frame label to the layout
+                self.video_widget.hide()
+                layout.addWidget(self.video_frame_label, 1)  # Stretch to fill available space
+                
+        print(f"Video display label added to layout with expanding size policy")
         
     def display_cv2_frame(self, frame):
-        """Convert OpenCV frame to QPixmap and display it with aggressive optimization for speed"""
+        """Convert OpenCV frame to QPixmap and display it with proper aspect ratio and quality"""
         try:
             if not hasattr(self, 'video_frame_label'):
                 self.setup_video_display_label()
@@ -4115,23 +4307,43 @@ class InteractiveVideoPlayer(QWidget):
             if label_size.width() <= 0 or label_size.height() <= 0:
                 return
                 
-            # Aggressively scale down the frame for much faster processing
-            height, width = frame.shape[:2]
+            # Scale to fill the entire container height
+            original_height, original_width = frame.shape[:2]
+            container_width = label_size.width()
+            container_height = label_size.height()
             
-            # Scale to a reasonable display size (max 640x360 for speed)
-            max_width = min(640, label_size.width())
-            max_height = min(360, label_size.height())
+            # Create cache key for current dimensions
+            cache_key = (original_width, original_height, container_width, container_height)
             
-            # Calculate scaling factor
-            scale_w = max_width / width
-            scale_h = max_height / height
-            scale = min(scale_w, scale_h)
+            # Check if we've already calculated dimensions for this configuration
+            if not hasattr(self, '_frame_size_cache') or self._frame_size_cache.get('key') != cache_key:
+                # Scale to fill the entire container
+                new_width = container_width
+                new_height = container_height
+                
+                # Ensure minimum quality for very small containers
+                min_dimension = min(new_width, new_height)
+                if min_dimension < 240:  # Very small container
+                    scale_factor = 240 / min_dimension
+                    new_width = int(new_width * scale_factor)
+                    new_height = int(new_height * scale_factor)
+                
+                # Cache the calculated dimensions
+                self._frame_size_cache = {
+                    'key': cache_key,
+                    'width': new_width,
+                    'height': new_height,
+                    'interpolation': cv2.INTER_CUBIC if new_width > original_width else cv2.INTER_AREA
+                }
             
-            if scale < 1.0:
-                new_width = int(width * scale)
-                new_height = int(height * scale)
-                # Use INTER_LINEAR for faster scaling than INTER_CUBIC
-                frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+            # Use cached dimensions
+            cache = self._frame_size_cache
+            new_width = cache['width']
+            new_height = cache['height']
+            interpolation = cache['interpolation']
+            
+            # Resize frame with cached settings
+            frame = cv2.resize(frame, (new_width, new_height), interpolation=interpolation)
             
             # Convert BGR to RGB (OpenCV uses BGR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -4148,8 +4360,11 @@ class InteractiveVideoPlayer(QWidget):
             if pixmap.isNull():
                 return
             
-            # Set the pixmap (no additional scaling needed since we already scaled the frame)
-            self.video_frame_label.setPixmap(pixmap)
+            # Scale the pixmap to exactly match the label size
+            scaled_pixmap = pixmap.scaled(label_size, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            
+            # Set the scaled pixmap
+            self.video_frame_label.setPixmap(scaled_pixmap)
             
         except Exception as e:
             print(f"Error displaying frame: {e}")
@@ -4356,9 +4571,10 @@ class InteractiveVideoPlayer(QWidget):
             self.media_player.setPosition(position_ms)
         
     def show_video_message(self, message):
-        """Show a message overlay on the video widget"""
+        """Show a message overlay on the video display area"""
         if not hasattr(self, 'video_message_label'):
-            self.video_message_label = QLabel(self.video_widget)
+            # Parent to the main widget instead of video_widget
+            self.video_message_label = QLabel(self)
             self.video_message_label.setAlignment(Qt.AlignCenter)
             self.video_message_label.setStyleSheet("""
                 QLabel {
@@ -4374,8 +4590,11 @@ class InteractiveVideoPlayer(QWidget):
         self.video_message_label.setText(message)
         self.video_message_label.resize(400, 120)
         
-        # Center the label in the video widget
-        widget_size = self.video_widget.size()
+        # Center the label in the video display area
+        if hasattr(self, 'video_frame_label') and self.video_frame_label.isVisible():
+            widget_size = self.video_frame_label.size()
+        else:
+            widget_size = self.video_widget.size()
         label_size = self.video_message_label.size()
         x = max(0, (widget_size.width() - label_size.width()) // 2)
         y = max(0, (widget_size.height() - label_size.height()) // 2)
@@ -4396,15 +4615,17 @@ class InteractiveVideoPlayer(QWidget):
         """Handle widget resize events"""
         super().resizeEvent(event)
         
-        # Resize and reposition video frame label if it exists and we're in fallback mode
-        if hasattr(self, 'video_frame_label') and hasattr(self, 'using_fallback') and self.using_fallback:
-            # Position the label to fill the video widget
-            self.video_frame_label.setGeometry(0, 0, self.video_widget.width(), self.video_widget.height())
+        # The video frame label is now part of the layout, so it will resize automatically
+        if hasattr(self, 'video_frame_label') and self.video_frame_label:
+            print(f"Video container resized to: {self.size()}, video label size: {self.video_frame_label.size()}")
             
         # Reposition message label if it exists and is visible
         if hasattr(self, 'video_message_label') and self.video_message_label.isVisible():
-            # Position message label relative to the video widget
-            widget_size = self.video_widget.size()
+            # Position message label relative to the video frame label (or widget if no label)
+            if hasattr(self, 'video_frame_label') and self.video_frame_label.isVisible():
+                widget_size = self.video_frame_label.size()
+            else:
+                widget_size = self.video_widget.size()
             label_size = self.video_message_label.size()
             x = max(0, (widget_size.width() - label_size.width()) // 2)
             y = max(0, (widget_size.height() - label_size.height()) // 2)
@@ -4591,20 +4812,95 @@ class InteractiveVideoPlayer(QWidget):
         
     def on_timeline_selection_changed(self, changed_part):
         """Handle selection changes from timeline"""
+        # Update preview mode in real-time when selections change
+        if self.preview_mode and hasattr(self, 'video_thread') and self.video_thread:
+            # Recalculate preview segments with new selection
+            self.video_thread.set_preview_mode(True, self.silent_parts)
+            self.preview_duration = self.video_thread.preview_duration
+            
+            # DON'T update timeline preview mode - timeline should always show original duration
+            # Only update the video thread for playback behavior
+            
+            # Update position slider range for new preview duration
+            if self.preview_duration > 0:
+                self.position_slider.setRange(0, int(self.preview_duration * 1000))
+                
+            # Update time label to reflect new duration
+            self.update_time_label_display()
+            
+            print(f"🔄 Preview mode updated: {len([p for p in self.silent_parts if p['selected']])} selected regions, new duration: {self.preview_duration:.1f}s")
+        
         self.selection_changed.emit(changed_part)
     
+    def toggle_all_silent_regions(self):
+        """Toggle all silent regions - if any are selected, deselect all; if none are selected, select all"""
+        if not self.silent_parts:
+            return
+            
+        # Check if any regions are currently selected
+        any_selected = any(part['selected'] for part in self.silent_parts)
+        
+        if any_selected:
+            # Deselect all
+            for part in self.silent_parts:
+                part['selected'] = False
+            self.select_all_btn.setText("☑️ Select All Silent Regions")
+            print("🔄 All regions deselected")
+        else:
+            # Select all
+            for part in self.silent_parts:
+                part['selected'] = True
+            self.select_all_btn.setText("☐ Deselect All Silent Regions")
+            print("🔄 All regions selected")
+        
+        self.timeline_widget.update()
+        
+        # Update preview mode in real-time
+        if self.preview_mode and hasattr(self, 'video_thread') and self.video_thread:
+            self.video_thread.set_preview_mode(True, self.silent_parts)
+            self.preview_duration = self.video_thread.preview_duration
+            # DON'T update timeline preview mode - timeline should always show original duration
+            if self.preview_duration > 0:
+                self.position_slider.setRange(0, int(self.preview_duration * 1000))
+            self.update_time_label_display()
+            print(f"🔄 New duration: {self.preview_duration:.1f}s")
+        
+        self.selection_changed.emit({})
+        
     def select_all_silent_regions(self):
-        """Select all silent regions"""
+        """Select all silent regions (legacy method for compatibility)"""
         for part in self.silent_parts:
             part['selected'] = True
         self.timeline_widget.update()
+        
+        # Update preview mode in real-time
+        if self.preview_mode and hasattr(self, 'video_thread') and self.video_thread:
+            self.video_thread.set_preview_mode(True, self.silent_parts)
+            self.preview_duration = self.video_thread.preview_duration
+            # DON'T update timeline preview mode - timeline should always show original duration
+            if self.preview_duration > 0:
+                self.position_slider.setRange(0, int(self.preview_duration * 1000))
+            self.update_time_label_display()
+            print(f"🔄 All regions selected: new duration: {self.preview_duration:.1f}s")
+        
         self.selection_changed.emit({})
         
     def deselect_all_silent_regions(self):
-        """Deselect all silent regions"""
+        """Deselect all silent regions (legacy method for compatibility)"""
         for part in self.silent_parts:
             part['selected'] = False
         self.timeline_widget.update()
+        
+        # Update preview mode in real-time
+        if self.preview_mode and hasattr(self, 'video_thread') and self.video_thread:
+            self.video_thread.set_preview_mode(True, self.silent_parts)
+            self.preview_duration = self.video_thread.preview_duration
+            # DON'T update timeline preview mode - timeline should always show original duration
+            if self.preview_duration > 0:
+                self.position_slider.setRange(0, int(self.preview_duration * 1000))
+            self.update_time_label_display()
+            print(f"🔄 All regions deselected: new duration: {self.preview_duration:.1f}s")
+        
         self.selection_changed.emit({})
 
     def on_video_player_selection_changed(self, changed_part):
@@ -4658,8 +4954,8 @@ class InteractiveVideoPlayer(QWidget):
             self.video_thread.preview_position_changed.connect(self.update_preview_position)
             self.preview_duration = self.video_thread.preview_duration
             
-        # Update timeline for preview mode
-        self.timeline_widget.set_preview_mode(True, self.silent_parts)
+        # DON'T set timeline to preview mode - timeline should always show original duration
+        # Only the video playback behavior should be affected by preview mode
         
         # Update position slider range for preview duration
         if self.preview_duration > 0:
@@ -4838,152 +5134,644 @@ class SilenceCutterApp(QMainWindow):
         self.setup_ui()
         
     def setup_ui(self):
-        self.setWindowTitle("Video Silence Cutter with Real-time Preview")
-        self.setMinimumWidth(900)
-        self.setMinimumHeight(700)
+        self.setWindowTitle("🎬 Video Silence Cutter")
+        self.setMinimumWidth(1200)
+        self.setMinimumHeight(800)
         
-        # Main layout - more compact
+        # Set modern dark theme
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #111827;
+                color: #f9fafb;
+            }
+            QWidget {
+                background-color: #111827;
+                color: #f9fafb;
+                font-family: 'Segoe UI', 'Inter', sans-serif;
+            }
+            QLabel {
+                color: #f9fafb;
+                font-weight: 500;
+            }
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 500;
+                font-size: 14px;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+                transform: translateY(-1px);
+            }
+            QPushButton:pressed {
+                background-color: #1e40af;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6b7280;
+            }
+            QPushButton#secondaryButton {
+                background-color: #374151;
+                color: #d1d5db;
+                border: 1px solid #4b5563;
+            }
+            QPushButton#secondaryButton:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+            QSlider::groove:horizontal {
+                border: none;
+                height: 4px;
+                background: #374151;
+                border-radius: 2px;
+            }
+            QSlider::handle:horizontal {
+                background: #2563eb;
+                border: none;
+                width: 16px;
+                height: 16px;
+                margin: -6px 0;
+                border-radius: 8px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #1d4ed8;
+            }
+            QSlider::sub-page:horizontal {
+                background: #2563eb;
+                border-radius: 2px;
+            }
+            QFrame {
+                background-color: #1f2937;
+                border: 1px solid #374151;
+                border-radius: 12px;
+            }
+            QProgressBar {
+                border: none;
+                border-radius: 4px;
+                background-color: #374151;
+                text-align: center;
+                color: white;
+                font-weight: 500;
+            }
+            QProgressBar::chunk {
+                background-color: #2563eb;
+                border-radius: 4px;
+            }
+        """)
+        
+        # Main layout with proper spacing
         main_widget = QWidget()
         main_layout = QVBoxLayout()
-        main_layout.setSpacing(5)  # Reduce spacing between sections
-        main_layout.setContentsMargins(10, 5, 10, 5)  # Reduce margins
+        main_layout.setSpacing(24)
+        main_layout.setContentsMargins(24, 24, 24, 24)
         
-        # File selection area - more compact
-        file_layout = QHBoxLayout()
-        file_layout.setSpacing(8)
-        self.file_label = QLabel("No file selected")
-        self.file_label.setFont(QFont("Arial", 9))  # Reduced from 10
+        # Header section
+        header_layout = QHBoxLayout()
+        header_layout.setSpacing(16)
         
-        select_btn = QPushButton("Select Video")
+        # App title with icon
+        title_layout = QHBoxLayout()
+        title_layout.setSpacing(12)
+        
+        # Icon placeholder (you can replace with actual icon)
+        icon_label = QLabel("🎬")
+        icon_label.setStyleSheet("""
+            QLabel {
+                background-color: #2563eb;
+                color: white;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 20px;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 40px;
+                max-height: 40px;
+                text-align: center;
+            }
+        """)
+        
+        app_title = QLabel("Video Silence Cutter")
+        app_title.setStyleSheet("""
+            QLabel {
+                font-size: 24px;
+                font-weight: 600;
+                color: #f9fafb;
+                margin: 0;
+            }
+        """)
+        
+        title_layout.addWidget(icon_label)
+        title_layout.addWidget(app_title)
+        title_layout.addStretch()
+        
+        # Header buttons - all with consistent height
+        shortcuts_btn = QPushButton("⌨️ Shortcuts")
+        shortcuts_btn.setObjectName("secondaryButton")
+        shortcuts_btn.setMaximumWidth(120)
+        shortcuts_btn.setMinimumHeight(40)
+        shortcuts_btn.setMaximumHeight(40)
+        shortcuts_btn.clicked.connect(self.show_shortcuts_modal)
+        
+        help_btn = QPushButton("❓ Help")
+        help_btn.setObjectName("secondaryButton")
+        help_btn.setMaximumWidth(100)
+        help_btn.setMinimumHeight(40)
+        help_btn.setMaximumHeight(40)
+        
+        # Export button (moved from processing status section)
+        self.export_btn = QPushButton("📤 Export Processed Video")
+        self.export_btn.setEnabled(False)
+        self.export_btn.clicked.connect(self.process_video)
+        self.export_btn.setMinimumHeight(40)
+        self.export_btn.setMaximumHeight(40)
+        self.export_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #059669;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 500;
+                font-size: 14px;
+                min-height: 40px;
+                max-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #047857;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6b7280;
+            }
+        """)
+        
+        theme_btn = QPushButton("🌙")
+        theme_btn.setObjectName("secondaryButton")
+        theme_btn.setMaximumWidth(50)
+        theme_btn.setMinimumHeight(40)
+        theme_btn.setMaximumHeight(40)
+        theme_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                border-radius: 8px;
+                padding: 8px;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 40px;
+                max-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+            }
+        """)
+        
+        header_layout.addLayout(title_layout)
+        header_layout.addWidget(shortcuts_btn)
+        header_layout.addWidget(help_btn)
+        header_layout.addWidget(self.export_btn)
+        header_layout.addWidget(theme_btn)
+        
+        main_layout.addLayout(header_layout)
+        
+        # Main content grid
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(24)
+        
+        # Left Panel - Control Parameters
+        left_panel = QFrame()
+        left_panel.setMaximumWidth(380)
+        left_panel.setMinimumWidth(380)
+        left_panel.setStyleSheet("""
+            QFrame {
+                background-color: #1f2937;
+                border: 1px solid #374151;
+                border-radius: 12px;
+                padding: 0;
+            }
+        """)
+        
+        left_layout = QVBoxLayout(left_panel)
+        left_layout.setSpacing(24)
+        left_layout.setContentsMargins(24, 24, 24, 24)
+        
+        # Control Parameters Title
+        params_title = QLabel("Control Parameters")
+        params_title.setStyleSheet("""
+            QLabel {
+                font-size: 18px;
+                font-weight: 600;
+                color: #f9fafb;
+                margin-bottom: 8px;
+            }
+        """)
+        left_layout.addWidget(params_title)
+        
+        # File Selection Section
+        file_section = QVBoxLayout()
+        file_section.setSpacing(8)
+        
+        file_header = QHBoxLayout()
+        file_label_title = QLabel("Select Video")
+        file_label_title.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 500;
+                color: #d1d5db;
+            }
+        """)
+        
+        self.file_name_label = QLabel("13.mp4")
+        self.file_name_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #6b7280;
+            }
+        """)
+        
+        file_header.addWidget(file_label_title)
+        file_header.addStretch()
+        file_header.addWidget(self.file_name_label)
+        
+        file_buttons = QHBoxLayout()
+        file_buttons.setSpacing(8)
+        
+        select_btn = QPushButton("📁 Browse Files")
         select_btn.clicked.connect(self.select_video)
-        select_btn.setMaximumWidth(120)  # Make more compact
+        select_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                color: #d1d5db;
+                border: 1px solid #4b5563;
+                padding: 10px 16px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+        """)
         
-        file_layout.addWidget(select_btn)
-        file_layout.addWidget(self.file_label, 1)
-        main_layout.addLayout(file_layout)
+        upload_btn = QPushButton("⬆️")
+        upload_btn.setObjectName("secondaryButton")
+        upload_btn.setMaximumWidth(50)
+        upload_btn.setToolTip("Drag & Drop")
+        upload_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #374151;
+                border: 1px solid #4b5563;
+                border-radius: 8px;
+                padding: 10px;
+                min-width: 40px;
+                max-width: 40px;
+            }
+            QPushButton:hover {
+                background-color: #4b5563;
+            }
+        """)
         
-        # Controls container - make all controls more compact
-        controls_frame = QFrame()
-        controls_frame.setFrameStyle(QFrame.StyledPanel)
-        controls_frame.setMaximumHeight(120)  # Limit height of control area
-        controls_layout = QVBoxLayout(controls_frame)
-        controls_layout.setSpacing(3)  # Tight spacing
-        controls_layout.setContentsMargins(8, 5, 8, 5)
+        file_buttons.addWidget(select_btn, 1)
+        file_buttons.addWidget(upload_btn)
         
-        # Silence threshold controls - more compact
-        threshold_layout = QHBoxLayout()
-        threshold_layout.setSpacing(6)
-        threshold_label = QLabel("Silence Threshold (dB):")
-        threshold_label.setFont(QFont("Arial", 9))
-        threshold_label.setMinimumWidth(150)
-        self.threshold_slider = QSlider(Qt.Horizontal)
-        self.threshold_slider.setMinimum(-60)
-        self.threshold_slider.setMaximum(-20)
-        self.threshold_slider.setValue(-52)
-        self.threshold_value_label = QLabel("-52 dB")
-        self.threshold_value_label.setFont(QFont("Arial", 9))
-        self.threshold_value_label.setMinimumWidth(60)
+        file_section.addLayout(file_header)
+        file_section.addLayout(file_buttons)
+        left_layout.addLayout(file_section)
         
+        # Silence Threshold Section
+        threshold_section = self.create_parameter_section(
+            "Silence Threshold (dB)", 
+            "ℹ️", 
+            "Audio level below which is considered silence",
+            -52, "dB", -80, -20, -52
+        )
+        self.threshold_slider = threshold_section['slider']
+        self.threshold_value_label = threshold_section['value_label']
         self.threshold_slider.valueChanged.connect(self.update_threshold_label)
+        left_layout.addLayout(threshold_section['layout'])
         
-        threshold_layout.addWidget(threshold_label)
-        threshold_layout.addWidget(self.threshold_slider)
-        threshold_layout.addWidget(self.threshold_value_label)
-        controls_layout.addLayout(threshold_layout)
-        
-        # Min silence duration controls - more compact
-        duration_layout = QHBoxLayout()
-        duration_layout.setSpacing(6)
-        duration_label = QLabel("Min Silence Duration (ms):")
-        duration_label.setFont(QFont("Arial", 9))
-        duration_label.setMinimumWidth(150)
-        self.duration_slider = QSlider(Qt.Horizontal)
-        self.duration_slider.setMinimum(100)
-        self.duration_slider.setMaximum(2000)
-        self.duration_slider.setValue(700)
-        self.duration_value_label = QLabel("700 ms")
-        self.duration_value_label.setFont(QFont("Arial", 9))
-        self.duration_value_label.setMinimumWidth(60)
-        
+        # Min Silence Duration Section
+        duration_section = self.create_parameter_section(
+            "Min Silence Duration (ms)",
+            "ℹ️",
+            "Minimum duration to be considered silence", 
+            700, "ms", 100, 2000, 700
+        )
+        self.duration_slider = duration_section['slider']
+        self.duration_value_label = duration_section['value_label']
         self.duration_slider.valueChanged.connect(self.update_duration_label)
+        left_layout.addLayout(duration_section['layout'])
         
-        duration_layout.addWidget(duration_label)
-        duration_layout.addWidget(self.duration_slider)
-        duration_layout.addWidget(self.duration_value_label)
-        controls_layout.addLayout(duration_layout)
-        
-        # Padding controls for non-silent segments - more compact
-        padding_layout = QHBoxLayout()
-        padding_layout.setSpacing(6)
-        padding_label = QLabel("Speech Padding Buffer (ms):")
-        padding_label.setFont(QFont("Arial", 9))
-        padding_label.setMinimumWidth(150)
-        self.padding_slider = QSlider(Qt.Horizontal)
-        self.padding_slider.setMinimum(0)
-        self.padding_slider.setMaximum(500)
-        self.padding_slider.setValue(100)
-        self.padding_value_label = QLabel("100 ms")
-        self.padding_value_label.setFont(QFont("Arial", 9))
-        self.padding_value_label.setMinimumWidth(60)
-        
+        # Speech Padding Buffer Section
+        padding_section = self.create_parameter_section(
+            "Speech Padding Buffer (ms)",
+            "ℹ️", 
+            "Buffer to preserve around speech segments",
+            100, "ms", 0, 500, 100
+        )
+        self.padding_slider = padding_section['slider']
+        self.padding_value_label = padding_section['value_label']
         self.padding_slider.valueChanged.connect(self.update_padding_label)
+        left_layout.addLayout(padding_section['layout'])
         
-        padding_layout.addWidget(padding_label)
-        padding_layout.addWidget(self.padding_slider)
-        padding_layout.addWidget(self.padding_value_label)
-        controls_layout.addLayout(padding_layout)
-        
-        # Detect button - more compact
-        detect_layout = QHBoxLayout()
-        self.detect_btn = QPushButton("Detect Silence")
+        # Detect Silence Button
+        self.detect_btn = QPushButton("🔊 Detect Silence")
         self.detect_btn.clicked.connect(self.detect_silence)
         self.detect_btn.setEnabled(False)
-        self.detect_btn.setMaximumWidth(150)
-        detect_layout.addWidget(self.detect_btn)
-        detect_layout.addStretch()
-        controls_layout.addLayout(detect_layout)
+        self.detect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                padding: 12px 16px;
+                font-weight: 600;
+                font-size: 14px;
+                border-radius: 8px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6b7280;
+            }
+        """)
+        left_layout.addWidget(self.detect_btn)
+        left_layout.addStretch()
         
-        main_layout.addWidget(controls_frame)
+        content_layout.addWidget(left_panel)
         
-        # Progress bar
+        # Right Panel - Video Preview & Timeline with Resizable Splitter
+        right_panel = QVBoxLayout()
+        right_panel.setSpacing(0)  # Remove spacing for splitter
+        
+        # Create vertical splitter for resizable video/timeline areas
+        self.video_timeline_splitter = QSplitter(Qt.Vertical)
+        self.video_timeline_splitter.setStyleSheet("""
+            QSplitter::handle {
+                background-color: #374151;
+                border: 1px solid #4b5563;
+                height: 8px;
+                margin: 2px 0;
+                border-radius: 4px;
+            }
+            QSplitter::handle:hover {
+                background-color: #4b5563;
+                border-color: #6b7280;
+            }
+            QSplitter::handle:pressed {
+                background-color: #2563eb;
+            }
+        """)
+        
+        # Video Preview Section (resizable)
+        video_section = QFrame()
+        video_section.setStyleSheet("""
+            QFrame {
+                background-color: #1f2937;
+                border: 1px solid #374151;
+                border-radius: 12px;
+            }
+        """)
+        
+        video_layout = QVBoxLayout(video_section)
+        video_layout.setSpacing(0)  # No spacing to maximize video height
+        video_layout.setContentsMargins(0, 0, 0, 0)  # No margins to maximize video height
+        
+        # Video container with fullscreen button overlay
+        video_container = QWidget()
+        video_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        video_container_layout = QVBoxLayout(video_container)
+        video_container_layout.setContentsMargins(0, 0, 0, 0)
+        video_container_layout.setSpacing(0)
+        
+        # Interactive Video Player (fills container height)
+        self.video_player = InteractiveVideoPlayer()
+        self.video_player.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.video_player.selection_changed.connect(self.on_video_player_selection_changed)
+        video_container_layout.addWidget(self.video_player, 1)
+        
+        # Fullscreen button overlay
+        self.fullscreen_btn = QPushButton("⛶")
+        self.fullscreen_btn.setParent(self)  # Parent to main window for flexible positioning
+        self.fullscreen_btn.clicked.connect(self.toggle_fullscreen)
+        self.fullscreen_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(55, 65, 81, 200);
+                color: #d1d5db;
+                border: 1px solid #4b5563;
+                border-radius: 8px;
+                padding: 8px;
+                font-size: 16px;
+                font-weight: bold;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 40px;
+                max-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: rgba(75, 85, 99, 220);
+                border-color: #6b7280;
+                transform: scale(1.05);
+            }
+            QPushButton:pressed {
+                background-color: rgba(37, 99, 235, 200);
+            }
+        """)
+        self.fullscreen_btn.setToolTip("Toggle Fullscreen (F11)")
+        
+        video_layout.addWidget(video_container, 1)
+        
+        # Progress bar (hidden by default, shown during processing) - don't add to layout to save space
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
-        self.progress_bar.setMaximumHeight(20)  # Make thinner
-        main_layout.addWidget(self.progress_bar)
+        self.progress_bar.setParent(self)  # Parent to main window instead of video layout
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                border-radius: 4px;
+                background-color: #374151;
+                text-align: center;
+                color: white;
+                font-weight: 500;
+                height: 8px;
+            }
+            QProgressBar::chunk {
+                background-color: #2563eb;
+                border-radius: 4px;
+            }
+        """)
         
-        # Interactive Video Player and Timeline
-        video_player_label = QLabel("Interactive Video Player with Real-time Preview:")
-        video_player_label.setFont(QFont("Arial", 11, QFont.Bold))  # Slightly smaller
-        main_layout.addWidget(video_player_label)
+        # Add video section to splitter
+        self.video_timeline_splitter.addWidget(video_section)
         
-        self.video_player = InteractiveVideoPlayer()
-        self.video_player.selection_changed.connect(self.on_video_player_selection_changed)
-        main_layout.addWidget(self.video_player, 1)  # Give it most of the space
+        # Add timeline section from video player to splitter
+        self.video_timeline_splitter.addWidget(self.video_player.timeline_section)
         
-        # Process button - more compact
-        process_layout = QHBoxLayout()
-        self.process_btn = QPushButton("Process and Save Video")
-        self.process_btn.clicked.connect(self.process_video)
-        self.process_btn.setEnabled(False)
-        self.process_btn.setMaximumWidth(200)
-        process_layout.addWidget(self.process_btn)
-        process_layout.addStretch()
-        main_layout.addLayout(process_layout)
+        # Set initial splitter sizes (60% video, 40% timeline)
+        self.video_timeline_splitter.setSizes([600, 400])
+        self.video_timeline_splitter.setCollapsible(0, False)  # Don't allow video section to collapse
+        self.video_timeline_splitter.setCollapsible(1, False)  # Don't allow timeline section to collapse
+        
+        right_panel.addWidget(self.video_timeline_splitter, 1)
+        
+        content_layout.addLayout(right_panel, 1)
+        main_layout.addLayout(content_layout)
         
         main_widget.setLayout(main_layout)
         self.setCentralWidget(main_widget)
+        
+        # Initialize file label
+        self.file_label = self.file_name_label
+        
+        # Initialize process_btn reference for compatibility
+        self.process_btn = self.export_btn
+        
+        # Initialize fullscreen state
+        self.is_fullscreen = False
+        self.original_geometry = None
+    
+    def create_parameter_section(self, title, icon, tooltip, value, unit, min_val, max_val, default_val):
+        """Create a modern parameter control section"""
+        section_layout = QVBoxLayout()
+        section_layout.setSpacing(8)
+        
+        # Header with title, icon, and value
+        header_layout = QHBoxLayout()
+        
+        title_with_icon = QHBoxLayout()
+        title_with_icon.setSpacing(8)
+        
+        title_label = QLabel(title)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                font-weight: 500;
+                color: #d1d5db;
+            }
+        """)
+        
+        info_icon = QLabel(icon)
+        info_icon.setToolTip(tooltip)
+        info_icon.setStyleSheet("""
+            QLabel {
+                color: #6b7280;
+                font-size: 14px;
+                padding: 2px;
+            }
+            QLabel:hover {
+                color: #9ca3af;
+            }
+        """)
+        
+        title_with_icon.addWidget(title_label)
+        title_with_icon.addWidget(info_icon)
+        title_with_icon.addStretch()
+        
+        # Value display
+        value_layout = QHBoxLayout()
+        value_layout.setSpacing(4)
+        
+        value_input = QLabel(str(value))
+        value_input.setStyleSheet("""
+            QLabel {
+                background-color: transparent;
+                color: #d1d5db;
+                font-size: 14px;
+                font-weight: 500;
+                min-width: 40px;
+                text-align: right;
+            }
+        """)
+        
+        unit_label = QLabel(unit)
+        unit_label.setStyleSheet("""
+            QLabel {
+                color: #6b7280;
+                font-size: 14px;
+            }
+        """)
+        
+        value_layout.addWidget(value_input)
+        value_layout.addWidget(unit_label)
+        
+        header_layout.addLayout(title_with_icon)
+        header_layout.addStretch()
+        header_layout.addLayout(value_layout)
+        
+        # Slider
+        slider = QSlider(Qt.Horizontal)
+        slider.setMinimum(min_val)
+        slider.setMaximum(max_val)
+        slider.setValue(default_val)
+        slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: none;
+                height: 4px;
+                background: #374151;
+                border-radius: 2px;
+            }
+            QSlider::handle:horizontal {
+                background: #2563eb;
+                border: none;
+                width: 16px;
+                height: 16px;
+                margin: -6px 0;
+                border-radius: 8px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #1d4ed8;
+            }
+            QSlider::sub-page:horizontal {
+                background: #2563eb;
+                border-radius: 2px;
+            }
+        """)
+        
+        # Scale labels
+        scale_layout = QHBoxLayout()
+        scale_layout.setContentsMargins(0, 4, 0, 0)
+        
+        min_label = QLabel(str(min_val))
+        mid_label = QLabel(str((min_val + max_val) // 2))
+        max_label = QLabel(str(max_val))
+        
+        for label in [min_label, mid_label, max_label]:
+            label.setStyleSheet("""
+                QLabel {
+                    font-size: 12px;
+                    color: #6b7280;
+                }
+            """)
+        
+        scale_layout.addWidget(min_label)
+        scale_layout.addStretch()
+        scale_layout.addWidget(mid_label)
+        scale_layout.addStretch()
+        scale_layout.addWidget(max_label)
+        
+        section_layout.addLayout(header_layout)
+        section_layout.addWidget(slider)
+        section_layout.addLayout(scale_layout)
+        
+        return {
+            'layout': section_layout,
+            'slider': slider,
+            'value_label': value_input
+        }
     
     def update_threshold_label(self):
         value = self.threshold_slider.value()
-        self.threshold_value_label.setText(f"{value} dB")
+        self.threshold_value_label.setText(f"{value}")
     
     def update_duration_label(self):
         value = self.duration_slider.value()
-        self.duration_value_label.setText(f"{value} ms")
+        self.duration_value_label.setText(f"{value}")
     
     def update_padding_label(self):
         value = self.padding_slider.value()
-        self.padding_value_label.setText(f"{value} ms")
+        self.padding_value_label.setText(f"{value}")
     
     def select_video(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -5106,8 +5894,9 @@ class SilenceCutterApp(QMainWindow):
         
         # Disable UI elements during detection
         self.detect_btn.setEnabled(False)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(True)
+        
+        # Show processing modal for detection
+        self.show_processing_modal("Detecting Silence", "Analyzing audio for silent regions...")
         
         # Initialize detection timing
         self.detection_start_time = time.time()
@@ -5138,7 +5927,8 @@ class SilenceCutterApp(QMainWindow):
         self.detection_thread.start()
     
     def update_detection_progress(self, progress):
-        self.progress_bar.setValue(progress)
+        # Update modal progress
+        self.update_processing_modal(progress)
         # Store current progress for countdown timer
         self.current_detection_progress = progress
     
@@ -5184,104 +5974,91 @@ class SilenceCutterApp(QMainWindow):
             # Handle final stages (90%+) - extend time if needed
             if progress >= 90 and self.detection_countdown_time < 5:
                 self.detection_countdown_time = max(5, self.detection_countdown_time)
-            
-            # Format time display
-            if self.detection_countdown_time > 60:
-                time_str = f"{int(self.detection_countdown_time/60)}m {int(self.detection_countdown_time%60)}s"
-            elif self.detection_countdown_time > 0:
-                time_str = f"{int(self.detection_countdown_time)}s"
-            else:
-                time_str = "Finishing..."
-            
-            # Update progress bar text
-            self.progress_bar.setFormat(f"Detecting silence... {progress}% ({time_str})")
-        else:
-            self.progress_bar.setFormat(f"Detecting silence... {progress}%")
     
     def show_detection_results(self, silent_parts):
         # Stop the countdown timer and reset variables
         if hasattr(self, 'detection_timer'):
             self.detection_timer.stop()
-        if hasattr(self, 'detection_countdown_time'):
-            delattr(self, 'detection_countdown_time')
-        if hasattr(self, 'detection_last_update'):
-            delattr(self, 'detection_last_update')
-            
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setFormat("%p%")  # Reset to default format
+            delattr(self, 'detection_timer')
+        
+        # Clean up countdown variables
+        for attr in ['detection_countdown_time', 'detection_last_update', 'current_detection_progress']:
+            if hasattr(self, attr):
+                delattr(self, attr)
+        
+        # Ensure progress reaches 100% before showing results
+        self.update_processing_modal(100, "Detection complete!")
+        QApplication.processEvents()
+        
+        # Small delay to show 100% completion then hide modal
+        QTimer.singleShot(1000, self.hide_processing_modal)
+        
+        self.silent_parts = silent_parts
+        self.silent_ranges = [(part['start'] * 1000, part['end'] * 1000) for part in silent_parts]
+        
+        # Enable process button
+        self.process_btn.setEnabled(True)
         self.detect_btn.setEnabled(True)
+        
+        # Update video player with silent parts
+        self.video_player.set_silent_parts(silent_parts)
+        
+        # Enable preview mode to activate silent region skipping during playback
+        self.video_player.enable_preview_mode()
         
         # Re-enable performance optimizations after detection
         self.enable_performance_optimizations()
         
-        print(f"\n---------- SILENCE DETECTION RESULTS ----------")
-        print(f"Number of silent parts detected: {len(silent_parts)}")
-        if silent_parts:
-            for i, part in enumerate(silent_parts[:5]):  # Show first 5
-                print(f"  Silence {i+1}: {part['start']:.2f}s - {part['end']:.2f}s (duration: {part['duration_ms']/1000:.2f}s)")
-            if len(silent_parts) > 5:
-                print(f"  ... and {len(silent_parts) - 5} more parts")
-        else:
-            print("  No silence parts were detected with current settings.")
-        print(f"---------- END SILENCE DETECTION RESULTS ----------\n")
+        print(f"✅ Detection completed! Found {len(silent_parts)} silent regions")
         
-        if not silent_parts:
-            QMessageBox.information(self, "Detection Results", "No silence detected with current settings.")
-            return
-        
-        self.silent_parts = silent_parts
-        
-        # Load silent parts into the video player timeline
-        self.video_player.set_silent_parts(silent_parts)
-        
-        # Automatically enable preview mode after silence detection
-        self.video_player.enable_preview_mode()
-        
-        self.process_btn.setEnabled(True)
+        # Show results message
+        total_silence_duration = sum(part['end'] - part['start'] for part in silent_parts)
+        QMessageBox.information(
+            self, 
+            "Detection Complete", 
+            f"Found {len(silent_parts)} silent regions.\n"
+            f"Total silence duration: {total_silence_duration:.1f} seconds\n\n"
+            f"Click on timeline regions to select/deselect them for processing."
+        )
     
     def on_video_player_selection_changed(self, changed_part):
-        """Handle selection changes from the video player timeline"""
-        # Update preview in real-time when selections change
-        if self.video_player.preview_mode and hasattr(self.video_player, 'video_thread'):
-            self.video_player.video_thread.set_preview_mode(True, self.video_player.silent_parts)
+        """Handle selection changes from the video player"""
+        # This method is called when a silent part selection changes
+        pass
     
     def process_video(self):
         if not self.video_path or not self.silent_parts:
             return
         
-        # Check if any silence parts are selected for cutting
-        if not any(part['selected'] for part in self.silent_parts):
-            QMessageBox.information(
-                self, 
-                "No Selections", 
-                "No silence segments are selected for cutting. Please select at least one segment."
-            )
+        # Get selected silent parts
+        selected_parts = [part for part in self.silent_parts if part.get('selected', False)]
+        
+        if not selected_parts:
+            QMessageBox.warning(self, "No Selection", "Please select at least one silent region to process.")
             return
         
         # Get output file path
-        file_name = os.path.basename(self.video_path)
-        base_name, ext = os.path.splitext(file_name)
-        suggested_name = f"{base_name}_silences_removed{ext}"
-        
+        base_name = os.path.splitext(os.path.basename(self.video_path))[0]
         output_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Output Video", suggested_name, f"Video Files (*{ext})"
+            self, "Save Processed Video", f"{base_name}_silences_removed.mp4", 
+            "Video Files (*.mp4)"
         )
         
         if not output_path:
             return
         
-        # Disable UI during processing
+        # Disable UI elements during processing
         self.process_btn.setEnabled(False)
         self.detect_btn.setEnabled(False)
-        self.progress_bar.setValue(0)
-        self.progress_bar.setVisible(True)
+        
+        # Show processing modal
+        self.show_processing_modal("Processing Video", "Removing silent regions from video...")
         
         # Initialize processing timing
         self.processing_start_time = time.time()
         try:
             file_size_mb = os.path.getsize(self.video_path) / (1024 * 1024)
-            # Processing is typically slower than detection, estimate 3-5 seconds per MB
-            self.processing_estimated_time = max(15, min(300, file_size_mb * 4))  # 4 seconds per MB, 15-300 second range
+            self.processing_estimated_time = max(30, min(300, file_size_mb * 5))  # Rough estimate: 5 seconds per MB, 30-300 second range
             print(f"📁 Processing {file_size_mb:.1f} MB file, estimated time: {self.processing_estimated_time:.0f}s")
         except:
             self.processing_estimated_time = 60  # Default estimate
@@ -5291,18 +6068,15 @@ class SilenceCutterApp(QMainWindow):
         self.processing_timer.timeout.connect(self.update_processing_countdown)
         self.processing_timer.start(1000)  # Update every second
         
-        # Start processing thread
-        self.processing_thread = ProcessingThread(
-            self.video_path,
-            self.silent_parts,
-            output_path
-        )
+        # Start the processing thread
+        self.processing_thread = ProcessingThread(self.video_path, selected_parts, output_path)
         self.processing_thread.progress_updated.connect(self.update_processing_progress)
         self.processing_thread.processing_complete.connect(self.show_processing_results)
         self.processing_thread.start()
     
     def update_processing_progress(self, progress):
-        self.progress_bar.setValue(progress)
+        # Update modal progress
+        self.update_processing_modal(progress)
         # Store current progress for countdown timer
         self.current_processing_progress = progress
     
@@ -5342,261 +6116,545 @@ class SilenceCutterApp(QMainWindow):
                 if progress > 5:
                     progress_based_estimate = (elapsed_time / progress) * (100 - progress)
                     # Only adjust if new estimate is significantly different and reasonable
-                    if abs(progress_based_estimate - self.processing_countdown_time) > 15 and progress_based_estimate < self.processing_countdown_time * 1.5:
+                    if abs(progress_based_estimate - self.processing_countdown_time) > 10 and progress_based_estimate < self.processing_countdown_time * 1.5:
                         self.processing_countdown_time = min(self.processing_countdown_time, progress_based_estimate)
             
-            # Handle final stages (90%+) - extend time significantly for rendering
-            if progress >= 90 and self.processing_countdown_time < 15:
-                self.processing_countdown_time = max(15, self.processing_countdown_time)
-            elif progress >= 95 and self.processing_countdown_time < 30:
-                self.processing_countdown_time = max(30, self.processing_countdown_time)
-            
-            # Format time display
-            if self.processing_countdown_time > 60:
-                time_str = f"{int(self.processing_countdown_time/60)}m {int(self.processing_countdown_time%60)}s"
-            elif self.processing_countdown_time > 0:
-                time_str = f"{int(self.processing_countdown_time)}s"
-            else:
-                time_str = "Finishing..."
-            
-            # Update progress bar text
-            self.progress_bar.setFormat(f"Processing video... {progress}% ({time_str})")
-        else:
-            self.progress_bar.setFormat(f"Processing video... {progress}%")
+            # Handle final stages (90%+) - extend time if needed
+            if progress >= 90 and self.processing_countdown_time < 10:
+                self.processing_countdown_time = max(10, self.processing_countdown_time)
     
     def show_processing_results(self, output_path):
-        # Ensure progress reaches 100% before showing results
-        self.progress_bar.setValue(100)
-        QApplication.processEvents()
-        
-        # Brief pause to ensure 100% is visible
-        import time
-        time.sleep(0.1)
-        
         # Stop the countdown timer and reset variables
         if hasattr(self, 'processing_timer'):
             self.processing_timer.stop()
-        if hasattr(self, 'processing_countdown_time'):
-            delattr(self, 'processing_countdown_time')
-        if hasattr(self, 'processing_last_update'):
-            delattr(self, 'processing_last_update')
-            
-        # Hide progress bar and reset UI IMMEDIATELY so user sees completion
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setFormat("%p%")  # Reset to default format
+            delattr(self, 'processing_timer')
+        
+        # Clean up countdown variables
+        for attr in ['processing_countdown_time', 'processing_last_update', 'current_processing_progress']:
+            if hasattr(self, attr):
+                delattr(self, attr)
+        
+        # Ensure progress reaches 100% before showing results
+        self.update_processing_modal(100, "Processing complete!")
+        QApplication.processEvents()
+        
+        # Small delay to show 100% completion then hide modal
+        QTimer.singleShot(1000, self.hide_processing_modal)
+        
+        # Re-enable UI elements
         self.process_btn.setEnabled(True)
         self.detect_btn.setEnabled(True)
         
-        # Force UI update to show the changes immediately
-        QApplication.processEvents()
+        print(f"✅ Processing completed! Output saved to: {output_path}")
         
-        if output_path:
-            # Check if hardware acceleration was used (look for indicators in console output)
-            hw_message = ""
-            try:
-                # This is a simple way to show hardware acceleration was attempted
-                # In a real implementation, you might want to pass this info from the processing thread
-                hw_message = "\n\n🚀 Hardware acceleration was used for faster processing!"
-            except:
-                pass
+        # Show completion message with option to open output folder
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Information)
+        msg.setWindowTitle("Processing Complete")
+        msg.setText(f"Video processing completed successfully!\n\nOutput saved to:\n{output_path}")
+        msg.setStandardButtons(QMessageBox.Ok)
+        
+        # Add button to open output folder
+        open_folder_btn = msg.addButton("Open Folder", QMessageBox.ActionRole)
+        
+        msg.exec_()
+        
+        if msg.clickedButton() == open_folder_btn:
+            # Open the output folder
+            import subprocess
+            import platform
             
-            QMessageBox.information(
-                self,
-                "Processing Complete",
-                f"Video processed successfully and saved to:\n{output_path}{hw_message}"
-            )
-        else:
-            QMessageBox.critical(
-                self,
-                "Processing Error",
-                "An error occurred during video processing. Please check console for details."
-            )
+            folder_path = os.path.dirname(output_path)
+            if platform.system() == "Windows":
+                subprocess.Popen(f'explorer /select,"{output_path}"')
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.Popen(["open", "-R", output_path])
+            else:  # Linux
+                subprocess.Popen(["xdg-open", folder_path])
     
     def closeEvent(self, event):
         """Handle application close event"""
-        try:
-            # Stop any ongoing detection or processing
-            if hasattr(self, 'detection_thread') and self.detection_thread.isRunning():
-                self.detection_thread.terminate()
-                self.detection_thread.wait(1000)
-            
-            if hasattr(self, 'processing_thread') and self.processing_thread.isRunning():
-                self.processing_thread.terminate()
-                self.processing_thread.wait(1000)
-            
-            
-            # Clean up video player resources
-            if hasattr(self, "video_player"):
-                self.video_player.cleanup_fallback_resources()
-                
-            # Clean up circular buffers and caches
-            self.cleanup_buffers()
-        except Exception as e:
-            print(f"Error during cleanup: {e}")
-        super().closeEvent(event)
+        # Stop any running threads
+        if hasattr(self, 'detection_thread') and self.detection_thread.isRunning():
+            self.detection_thread.terminate()
+            self.detection_thread.wait()
         
+        if hasattr(self, 'processing_thread') and self.processing_thread.isRunning():
+            self.processing_thread.terminate()
+            self.processing_thread.wait()
+        
+        # Clean up video player resources
+        if hasattr(self, 'video_player'):
+            self.video_player.cleanup_fallback_resources()
+        
+        # Clean up buffers and caches
+        self.cleanup_buffers()
+        
+        event.accept()
+    
     def cleanup_buffers(self):
         """Clean up all circular buffers and caches"""
         try:
-            # Clear video playback thread buffers
-            if hasattr(self.video_player, 'video_thread') and self.video_player.video_thread:
-                if hasattr(self.video_player.video_thread, 'frame_buffer'):
-                    self.video_player.video_thread.frame_buffer.clear()
-                if hasattr(self.video_player.video_thread, 'audio_buffer'):
-                    self.video_player.video_thread.audio_buffer.clear()
-                    
-            # Clear timeline waveform cache
-            if hasattr(self.video_player, 'timeline') and hasattr(self.video_player.timeline, 'waveform_cache'):
-                self.video_player.timeline.waveform_cache.clear()
+            # Clean up timeline widget buffers
+            if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
+                timeline = self.video_player.timeline_widget
                 
+                # Clear waveform cache
+                if hasattr(timeline, 'waveform_cache'):
+                    timeline.waveform_cache.clear()
+                
+                # Clear any other buffers
+                if hasattr(timeline, 'frame_buffer'):
+                    timeline.frame_buffer.clear()
+                    
+                if hasattr(timeline, 'audio_buffer'):
+                    timeline.audio_buffer.clear()
+            
             print("🧹 Circular buffers and caches cleared")
         except Exception as e:
-            print(f"Error cleaning up buffers: {e}")
-            
+            print(f"⚠️ Error cleaning up buffers: {e}")
+    
     def get_buffer_stats(self):
-        """Get performance statistics from circular buffers"""
+        """Get statistics from all buffers for debugging"""
         stats = {}
+        
         try:
-            # Video frame buffer stats
-            if (hasattr(self.video_player, 'video_thread') and 
-                self.video_player.video_thread and 
-                hasattr(self.video_player.video_thread, 'frame_buffer')):
-                stats['frame_buffer'] = self.video_player.video_thread.frame_buffer.get_cache_stats()
+            if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
+                timeline = self.video_player.timeline_widget
                 
-            # Waveform cache stats
-            if (hasattr(self.video_player, 'timeline') and 
-                hasattr(self.video_player.timeline, 'waveform_cache')):
-                waveform_cache = self.video_player.timeline.waveform_cache
-                stats['waveform_cache'] = {
-                    'size': len(waveform_cache.cache),
-                    'max_size': waveform_cache.max_levels
-                }
-                
-            return stats
+                if hasattr(timeline, 'frame_buffer'):
+                    stats['frame_buffer'] = timeline.frame_buffer.get_cache_stats()
+                    
+                if hasattr(timeline, 'audio_buffer'):
+                    stats['audio_buffer'] = {
+                        'size': len(timeline.audio_buffer.buffer),
+                        'max_size': timeline.audio_buffer.max_samples
+                    }
+                    
+                if hasattr(timeline, 'waveform_cache'):
+                    stats['waveform_cache'] = {
+                        'entries': len(timeline.waveform_cache.cache),
+                        'max_entries': timeline.waveform_cache.max_levels
+                    }
         except Exception as e:
-            print(f"Error getting buffer stats: {e}")
-            return {}
-            
+            stats['error'] = str(e)
+        
+        return stats
+    
     def enable_performance_optimizations(self):
-        """Enable performance optimizations after initial loading is complete"""
+        """Enable performance optimizations for smooth playback"""
         try:
-            # Enable buffer operations
-            if hasattr(self.video_player, 'video_thread') and self.video_player.video_thread:
-                self.video_player.video_thread.set_buffer_mode(True)
-                
-            # Enable waveform caching
-            if hasattr(self.video_player, 'timeline'):
-                self.video_player.timeline.enable_caching()
+            if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
+                timeline = self.video_player.timeline_widget
+                timeline.enable_caching()
                 
             print("⚡ Performance optimizations enabled")
         except Exception as e:
-            print(f"Error enabling optimizations: {e}")
-            
+            print(f"⚠️ Error enabling optimizations: {e}")
+    
     def disable_performance_optimizations(self):
-        """Disable performance optimizations during heavy operations"""
+        """Disable performance optimizations for faster processing"""
         try:
-            # Disable all buffer operations
-            if hasattr(self.video_player, 'video_thread') and self.video_player.video_thread:
-                self.video_player.video_thread.set_buffer_mode(False)
+            if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
+                timeline = self.video_player.timeline_widget
+                timeline.disable_caching()
                 
-            # Disable waveform caching
-            if hasattr(self.video_player, 'timeline'):
-                self.video_player.timeline.disable_caching()
-                
-            print("🔄 Performance optimizations disabled for heavy operation")
+            print("🔧 Performance optimizations disabled for processing")
         except Exception as e:
-            print(f"Error disabling optimizations: {e}")
-            
+            print(f"⚠️ Error disabling optimizations: {e}")
+    
     def clear_previous_data(self):
-        """Clear all previous video data and UI elements completely"""
+        """Clear all previous video data and reset UI state"""
         try:
-            print("🧹 Clearing all previous video data...")
-            
-            # Clear silent parts data
+            # Reset video path and silent parts
+            self.video_path = None
             self.silent_parts = []
+            self.silent_ranges = []
             
-            # Stop any running threads
-            if hasattr(self, 'detection_thread') and self.detection_thread and self.detection_thread.isRunning():
-                self.detection_thread.terminate()
-                self.detection_thread.wait(1000)
-                
-            if hasattr(self, 'processing_thread') and self.processing_thread and self.processing_thread.isRunning():
-                self.processing_thread.terminate()
-                self.processing_thread.wait(1000)
-            
-            # Clear timeline data completely
-            if hasattr(self.video_player, 'timeline'):
-                timeline = self.video_player.timeline
-                
-                # Stop any waveform loading thread
-                if hasattr(timeline, 'waveform_thread') and timeline.waveform_thread and timeline.waveform_thread.isRunning():
-                    timeline.waveform_thread.terminate()
-                    timeline.waveform_thread.wait(1000)
-                
-                # Clear all timeline data
-                timeline.set_silent_parts([], [])
-                timeline.set_duration(0)
-                timeline.set_position(0, instant=True)
-                timeline.waveform_data = None
-                timeline.waveform_max_amplitude = 0
-                timeline.video_path = None
-                timeline.preview_mode = False
-                timeline.zoom_level = 1.0
-                timeline.zoom_offset = 0.0
-                timeline.current_position = 0
-                timeline.target_position = 0
-                
-                # Clear caches
-                timeline.waveform_cache.clear()
-                if hasattr(timeline, 'history'):
-                    timeline.history = []
-                    timeline.history_index = -1
-                
-                # Force update
-                timeline.update()
-                
-            # Clear video player data
-            if hasattr(self.video_player, 'video_thread') and self.video_player.video_thread:
-                self.video_player.video_thread.frame_buffer.clear()
-                self.video_player.video_thread.audio_buffer.clear()
-                self.video_player.video_thread.stop_playback()
-                
             # Reset UI elements
-            self.progress_bar.setValue(0)
-            self.progress_bar.setVisible(False)
-            self.detect_btn.setEnabled(False)
-            self.process_btn.setEnabled(False)
-            self.file_label.setText("No file selected")
+            if hasattr(self, 'file_label'):
+                self.file_label.setText("No file selected")
             
-            print("✅ All previous data cleared successfully")
+            if hasattr(self, 'detect_btn'):
+                self.detect_btn.setEnabled(False)
+                
+            if hasattr(self, 'process_btn'):
+                self.process_btn.setEnabled(False)
+            
+            if hasattr(self, 'progress_bar'):
+                self.progress_bar.setVisible(False)
+                self.progress_bar.setValue(0)
+            
+            # Hide any processing modals
+            self.hide_processing_modal()
+            
+            # Clear video player
+            if hasattr(self, 'video_player'):
+                self.video_player.cleanup_fallback_resources()
+                
+                # Clear timeline
+                if hasattr(self.video_player, 'timeline_widget'):
+                    timeline = self.video_player.timeline_widget
+                    timeline.set_duration(0)
+                    timeline.set_silent_parts([], [])
+                    timeline.update()
+            
+            # Clean up any running timers
+            for attr_name in dir(self):
+                attr = getattr(self, attr_name)
+                if isinstance(attr, QTimer) and attr.isActive():
+                    attr.stop()
+            
+            # Clean up buffers
+            self.cleanup_buffers()
+            
+            print("🧹 Previous data cleared")
+            
         except Exception as e:
-            print(f"Error clearing previous data: {e}")
+            print(f"⚠️ Error clearing previous data: {e}")
     
     def show_loading_overlay(self, message="Loading..."):
-        """Show beautiful loading overlay"""
+        """Show loading overlay with message"""
         if not self.loading_overlay:
             self.loading_overlay = LoadingOverlay(self)
-            self.loading_overlay.setFixedSize(self.size())
         
         self.loading_overlay.show_loading(message)
-        QApplication.processEvents()  # Ensure UI updates immediately
-        
+        self.loading_overlay.raise_()
+        QApplication.processEvents()
+    
     def update_loading_progress(self, message):
-        """Update loading progress message"""
+        """Update loading overlay message"""
         if self.loading_overlay:
             self.loading_overlay.update_progress(message)
             QApplication.processEvents()
-            
+    
     def hide_loading_overlay(self):
         """Hide loading overlay"""
         if self.loading_overlay:
             self.loading_overlay.hide_loading()
     
     def resizeEvent(self, event):
-        """Handle window resize to update loading overlay size"""
+        """Handle window resize events"""
         super().resizeEvent(event)
         if self.loading_overlay:
-            self.loading_overlay.setFixedSize(self.size())
+            self.loading_overlay.resize(self.size())
+        
+        # Position fullscreen button in lower right corner of video container
+        if hasattr(self, 'fullscreen_btn') and hasattr(self, 'video_player'):
+            QTimer.singleShot(10, self.position_fullscreen_button)  # Delay to ensure layout is updated
+    
+    def position_fullscreen_button(self):
+        """Position the fullscreen button in the lower right corner of the video section"""
+        if hasattr(self, 'fullscreen_btn') and hasattr(self, 'video_player'):
+            # Get the video section from the splitter (first widget)
+            if hasattr(self, 'video_timeline_splitter') and self.video_timeline_splitter.count() > 0:
+                video_section = self.video_timeline_splitter.widget(0)
+                if video_section:
+                    # Get video section geometry
+                    section_rect = video_section.geometry()
+                    button_size = self.fullscreen_btn.size()
+                    
+                    # Position relative to the main window, accounting for video section position
+                    # Get the video section's position relative to main window
+                    section_pos = video_section.mapTo(self, video_section.rect().topLeft())
+                    
+                    # Position in lower right corner with 16px margin
+                    x = section_pos.x() + section_rect.width() - button_size.width() - 16
+                    y = section_pos.y() + section_rect.height() - button_size.height() - 16
+                    
+                    self.fullscreen_btn.move(x, y)
+                    self.fullscreen_btn.raise_()  # Ensure button is on top
+                    self.fullscreen_btn.show()  # Ensure button is visible
+    
+    def show_shortcuts_modal(self):
+        """Show keyboard shortcuts in a modal dialog"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Keyboard Shortcuts")
+        dialog.setModal(True)
+        dialog.setFixedSize(500, 350)
+        dialog.setStyleSheet("""
+            QDialog {
+                background-color: #111827;
+                color: #f9fafb;
+            }
+            QLabel {
+                color: #f9fafb;
+            }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(24)
+        layout.setContentsMargins(32, 32, 32, 32)
+        
+        # Title
+        title = QLabel("⌨️ Keyboard Shortcuts")
+        title.setStyleSheet("""
+            QLabel {
+                font-size: 24px;
+                font-weight: 600;
+                color: #f9fafb;
+                margin-bottom: 16px;
+            }
+        """)
+        layout.addWidget(title)
+        
+        # Shortcuts grid
+        shortcuts_data = [
+            ("Space", "Play/Pause video"),
+            ("S", "Stop playback"), 
+            ("←/→", "Navigate 5 seconds"),
+            ("Ctrl+S", "Save project"),
+            ("Ctrl+O", "Open video file"),
+            ("Ctrl+E", "Export processed video"),
+            ("Ctrl+D", "Detect silence"),
+            ("Esc", "Close dialogs")
+        ]
+        
+        for key, action in shortcuts_data:
+            shortcut_layout = QHBoxLayout()
+            shortcut_layout.setSpacing(16)
+            
+            key_label = QLabel(key)
+            key_label.setStyleSheet("""
+                QLabel {
+                    background-color: #374151;
+                    color: #d1d5db;
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-weight: 500;
+                    font-family: 'Consolas', 'Monaco', monospace;
+                    min-width: 80px;
+                    text-align: center;
+                }
+            """)
+            
+            action_label = QLabel(action)
+            action_label.setStyleSheet("""
+                QLabel {
+                    font-size: 14px;
+                    color: #d1d5db;
+                }
+            """)
+            
+            shortcut_layout.addWidget(key_label)
+            shortcut_layout.addWidget(action_label)
+            shortcut_layout.addStretch()
+            
+            layout.addLayout(shortcut_layout)
+        
+        layout.addStretch()
+        
+        # Close button
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.close)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2563eb;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 12px 24px;
+                font-weight: 500;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #1d4ed8;
+            }
+        """)
+        
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(close_btn)
+        layout.addLayout(button_layout)
+        
+        dialog.exec_()
+    
+    def show_processing_modal(self, title="Processing Video", message="Processing your video..."):
+        """Show processing progress in a modal dialog"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
+        from PyQt5.QtCore import Qt
+        
+        self.processing_dialog = QDialog(self)
+        self.processing_dialog.setWindowTitle(title)
+        self.processing_dialog.setModal(True)
+        self.processing_dialog.setFixedSize(400, 200)
+        self.processing_dialog.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+        self.processing_dialog.setStyleSheet("""
+            QDialog {
+                background-color: #111827;
+                color: #f9fafb;
+            }
+            QLabel {
+                color: #f9fafb;
+            }
+        """)
+        
+        layout = QVBoxLayout(self.processing_dialog)
+        layout.setSpacing(24)
+        layout.setContentsMargins(32, 32, 32, 32)
+        
+        # Title
+        title_label = QLabel("🎬 " + title)
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 20px;
+                font-weight: 600;
+                color: #f9fafb;
+                text-align: center;
+            }
+        """)
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+        
+        # Message
+        self.processing_message = QLabel(message)
+        self.processing_message.setStyleSheet("""
+            QLabel {
+                font-size: 14px;
+                color: #d1d5db;
+                text-align: center;
+            }
+        """)
+        self.processing_message.setAlignment(Qt.AlignCenter)
+        self.processing_message.setWordWrap(True)
+        layout.addWidget(self.processing_message)
+        
+        # Progress bar
+        self.processing_progress = QProgressBar()
+        self.processing_progress.setStyleSheet("""
+            QProgressBar {
+                border: none;
+                border-radius: 8px;
+                background-color: #374151;
+                text-align: center;
+                color: white;
+                font-weight: 500;
+                height: 20px;
+            }
+            QProgressBar::chunk {
+                background-color: #2563eb;
+                border-radius: 8px;
+            }
+        """)
+        layout.addWidget(self.processing_progress)
+        
+        # Time remaining label
+        self.time_remaining_label = QLabel("Calculating time...")
+        self.time_remaining_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #6b7280;
+                text-align: center;
+            }
+        """)
+        self.time_remaining_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.time_remaining_label)
+        
+        self.processing_dialog.show()
+    
+    def update_processing_modal(self, progress, message=None, time_remaining=None):
+        """Update processing modal progress"""
+        if hasattr(self, 'processing_dialog') and self.processing_dialog.isVisible():
+            self.processing_progress.setValue(progress)
+            
+            if message:
+                self.processing_message.setText(message)
+            
+            if time_remaining:
+                self.time_remaining_label.setText(time_remaining)
+            
+            QApplication.processEvents()
+    
+    def hide_processing_modal(self):
+        """Hide processing modal"""
+        if hasattr(self, 'processing_dialog'):
+            self.processing_dialog.close()
+            delattr(self, 'processing_dialog')
+    
+    def toggle_fullscreen(self):
+        """Toggle fullscreen mode for the video player"""
+        if not self.is_fullscreen:
+            # Enter fullscreen
+            self.is_fullscreen = True
+            self.original_geometry = self.geometry()
+            self.original_window_state = self.windowState()
+            
+            # Hide all UI elements except video
+            self.hide_ui_for_fullscreen()
+            
+            # Make the main window fullscreen
+            self.setWindowState(Qt.WindowFullScreen)
+            
+            # Update fullscreen button text
+            self.fullscreen_btn.setText("⛶")
+            self.fullscreen_btn.setToolTip("Exit Fullscreen (ESC)")
+            
+        else:
+            self.exit_fullscreen()
+    
+    def exit_fullscreen(self):
+        """Exit fullscreen mode"""
+        if self.is_fullscreen:
+            self.is_fullscreen = False
+            
+            # Restore window state
+            self.setWindowState(self.original_window_state)
+            
+            # Show all UI elements
+            self.show_ui_after_fullscreen()
+            
+            # Update fullscreen button text
+            self.fullscreen_btn.setText("⛶")
+            self.fullscreen_btn.setToolTip("Toggle Fullscreen (F11)")
+    
+    def hide_ui_for_fullscreen(self):
+        """Hide UI elements for fullscreen mode"""
+        # Store references to hidden widgets
+        self.hidden_widgets = []
+        
+        # Find and hide the main content layout children except video
+        main_widget = self.centralWidget()
+        if main_widget and main_widget.layout():
+            main_layout = main_widget.layout()
+            for i in range(main_layout.count()):
+                item = main_layout.itemAt(i)
+                if item and item.widget():
+                    widget = item.widget()
+                    # Hide header and content layout, but keep the video visible
+                    if not hasattr(widget, 'video_timeline_splitter'):
+                        widget.hide()
+                        self.hidden_widgets.append(widget)
+        
+        # Hide the timeline section from the splitter
+        if hasattr(self, 'video_timeline_splitter'):
+            # Hide timeline (second widget in splitter)
+            if self.video_timeline_splitter.count() > 1:
+                timeline_widget = self.video_timeline_splitter.widget(1)
+                if timeline_widget:
+                    timeline_widget.hide()
+                    self.hidden_widgets.append(timeline_widget)
+    
+    def show_ui_after_fullscreen(self):
+        """Show UI elements after exiting fullscreen"""
+        # Show all previously hidden widgets
+        if hasattr(self, 'hidden_widgets'):
+            for widget in self.hidden_widgets:
+                widget.show()
+            delattr(self, 'hidden_widgets')
+    
+    def keyPressEvent(self, event):
+        """Handle keyboard shortcuts"""
+        if event.key() == Qt.Key_F11:
+            self.toggle_fullscreen()
+            event.accept()
+        elif event.key() == Qt.Key_Escape and self.is_fullscreen:
+            self.exit_fullscreen()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
 # Clean up any temporary files on exit
 def cleanup_temp_files():
