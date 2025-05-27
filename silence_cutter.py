@@ -33,6 +33,15 @@ except ImportError as e:
     print(f"⚠️  Manual cutting feature not available: {e}")
     MANUAL_CUTTING_AVAILABLE = False
 
+# Import batch processing feature
+try:
+    from features.batch_processing import BatchProcessingIntegration
+    BATCH_PROCESSING_AVAILABLE = True
+    print("✅ Batch processing feature loaded successfully")
+except ImportError as e:
+    print(f"⚠️  Batch processing feature not available: {e}")
+    BATCH_PROCESSING_AVAILABLE = False
+
 class CircularBuffer:
     """High-performance circular buffer for video frames and audio samples"""
     def __init__(self, max_size, item_type="frame"):
@@ -6001,6 +6010,38 @@ class SilenceCutterApp(QMainWindow):
         help_btn.setMinimumHeight(40)
         help_btn.setMaximumHeight(40)
         
+        # Batch Processing button
+        batch_btn = QPushButton("📦 Batch Processing")
+        batch_btn.setObjectName("batchButton")
+        batch_btn.setMaximumWidth(150)
+        batch_btn.setMinimumHeight(40)
+        batch_btn.setMaximumHeight(40)
+        batch_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 8px 16px;
+                font-weight: 500;
+                font-size: 14px;
+                min-height: 40px;
+                max-height: 40px;
+            }
+            QPushButton:hover {
+                background-color: #F57C00;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6b7280;
+            }
+        """)
+        if BATCH_PROCESSING_AVAILABLE:
+            batch_btn.clicked.connect(self.open_batch_processing)
+        else:
+            batch_btn.setEnabled(False)
+            batch_btn.setToolTip("Batch processing feature not available")
+        
         # Export button (moved from processing status section)
         self.export_btn = QPushButton("📤 Export Processed Media")
         self.export_btn.setEnabled(False)
@@ -6031,6 +6072,7 @@ class SilenceCutterApp(QMainWindow):
         header_layout.addLayout(title_layout)
         header_layout.addWidget(shortcuts_btn)
         header_layout.addWidget(help_btn)
+        header_layout.addWidget(batch_btn)
         header_layout.addWidget(self.export_btn)
         
         main_layout.addLayout(header_layout)
@@ -7243,6 +7285,35 @@ class SilenceCutterApp(QMainWindow):
                     self.fullscreen_btn.move(x, y)
                     self.fullscreen_btn.raise_()  # Ensure button is on top
                     self.fullscreen_btn.show()  # Ensure button is visible
+    
+    def open_batch_processing(self):
+        """Open batch processing dialog"""
+        if not BATCH_PROCESSING_AVAILABLE:
+            QMessageBox.warning(
+                self,
+                "Feature Not Available",
+                "Batch processing feature is not available. Please ensure the batch_processing module is properly installed."
+            )
+            return
+            
+        try:
+            from features.batch_processing import BatchProcessingDialog
+            
+            # Create and show batch processing dialog
+            dialog = BatchProcessingDialog(
+                self,
+                SilenceDetectionThread,
+                ProcessingThread,
+                AudioProcessingThread
+            )
+            dialog.exec_()
+            
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Batch Processing Error",
+                f"Failed to open batch processing dialog:\n{str(e)}"
+            )
     
     def show_shortcuts_modal(self):
         """Show keyboard shortcuts in a modal dialog"""
