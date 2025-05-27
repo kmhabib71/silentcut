@@ -271,7 +271,9 @@ class VideoPlaybackThread(QThread):
         """Initialize video capture and audio"""
         self.cap = cv2.VideoCapture(self.video_path)
         if self.cap.isOpened():
-            self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30
+            detected_fps = self.cap.get(cv2.CAP_PROP_FPS) or 30
+            # Ensure minimum 30 FPS for smooth playback
+            self.fps = max(detected_fps, 30)
             self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
             
             # Get actual video duration using moviepy for accuracy
@@ -291,7 +293,8 @@ class VideoPlaybackThread(QThread):
             else:
                 self.frame_duration = 1.0 / self.fps
                 
-            print(f"Video initialized: {self.fps} FPS, {self.frame_count} frames, exact duration: {self.actual_duration:.6f}s, frame duration: {self.frame_duration:.6f}s")
+            print(f"Video initialized: detected {detected_fps} FPS, using {self.fps} FPS, {self.frame_count} frames, exact duration: {self.actual_duration:.6f}s, frame duration: {self.frame_duration:.6f}s")
+            print(f"✓ Video preview will use framerate: {self.fps} FPS (minimum 30 FPS enforced)")
             
             # Initialize audio
             self.initialize_audio()
@@ -618,11 +621,10 @@ class VideoPlaybackThread(QThread):
         if not self.initialize_video():
             return
             
-        # Performance optimization: Target lower FPS for smoother playback
-        target_fps = 24 if self.preview_mode else 30
+        # Use original video framerate for accurate playback
+        target_fps = self.fps
         target_frame_time = 1.0 / target_fps
         
-        frame_skip_counter = 0
         last_ui_update = 0
         
         while not self.stop_requested:
@@ -641,7 +643,6 @@ class VideoPlaybackThread(QThread):
                 self.current_frame = seek_frame
                 self.playback_initial_frame = seek_frame
                 initial_frame = seek_frame
-                frame_skip_counter = 0  # Reset skip counter on seek
             self.mutex.unlock()
             
             if seek_frame >= 0 or playing:
@@ -693,13 +694,8 @@ class VideoPlaybackThread(QThread):
                                 pass
                         print("✓ Preview playback completed - reached end of segments")
                 
-                # Performance optimization: Skip frame processing if we're behind
+                # Always process frames to maintain original framerate
                 should_process_frame = True
-                if playing and not seek_frame >= 0:
-                    frame_skip_counter += 1
-                    # Skip every other frame if we're lagging (adaptive frame skipping)
-                    if frame_skip_counter % 2 == 0 and preview_mode:
-                        should_process_frame = False
                 
                 # Read and display frame with circular buffer optimization
                 if should_process_frame:
@@ -743,9 +739,10 @@ class VideoPlaybackThread(QThread):
                         if pixmap:
                             self.frame_ready.emit(pixmap)
                             
-                            # Reduce UI update frequency to prevent freezing
+                            # Update UI at video framerate for smooth playback
                             current_time = time.time()
-                            if current_time - last_ui_update > 0.1:  # Update max 10 times per second
+                            ui_update_interval = 1.0 / target_fps  # Match video framerate
+                            if current_time - last_ui_update >= ui_update_interval:
                                 self.position_changed.emit(self.current_frame)
                                 last_ui_update = current_time
                             
