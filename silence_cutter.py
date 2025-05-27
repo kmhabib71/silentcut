@@ -3621,6 +3621,20 @@ class TimelineWidget(QWidget):
                 avg_rect = QRectF(pixel_x, waveform_center_y - avg_height, 1, avg_height * 2)
                 avg_color = QColor(40, 120, 180, 240)  # Dark blue
                 painter.fillRect(avg_rect, avg_color)
+        
+        # Draw enhanced center line (bright for dark background)
+        painter.setPen(QPen(QColor(200, 200, 200, 180), 1))
+        painter.drawLine(int(timeline_rect.left()), int(waveform_center_y), 
+                        int(timeline_rect.right()), int(waveform_center_y))
+        
+        # Draw subtle grid lines for amplitude reference (bright for dark background)
+        painter.setPen(QPen(QColor(100, 100, 100, 120), 1))
+        quarter_height = waveform_height / 4
+        for i in [1, -1]:  # Draw lines at ±25% and ±50% amplitude
+            y1 = waveform_center_y + i * quarter_height
+            y2 = waveform_center_y + i * quarter_height * 2
+            painter.drawLine(int(timeline_rect.left()), int(y1), int(timeline_rect.right()), int(y1))
+            painter.drawLine(int(timeline_rect.left()), int(y2), int(timeline_rect.right()), int(y2))
     
     def draw_debug_info(self, painter, timeline_rect):
         """Draw debug information showing click position and playhead position"""
