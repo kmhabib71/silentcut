@@ -24,6 +24,15 @@ import threading
 from collections import deque
 import queue
 
+# Import manual cutting feature
+try:
+    from features import ManualCuttingManager, ManualCuttingIntegration
+    MANUAL_CUTTING_AVAILABLE = True
+    print("✅ Manual cutting feature loaded successfully")
+except ImportError as e:
+    print(f"⚠️  Manual cutting feature not available: {e}")
+    MANUAL_CUTTING_AVAILABLE = False
+
 class CircularBuffer:
     """High-performance circular buffer for video frames and audio samples"""
     def __init__(self, max_size, item_type="frame"):
@@ -5476,6 +5485,21 @@ class InteractiveVideoPlayer(QWidget):
             total_time = self.format_time_simple(getattr(self, 'video_duration_ms', 0) // 1000)
             self.time_label.setText(f"{current_time} / {total_time}")
     
+    def set_preview_mode(self, enabled, silent_parts=None):
+        """Set preview mode with optional silent parts (supports manual cuts)"""
+        if enabled and silent_parts:
+            self.silent_parts = silent_parts
+            self.enable_preview_mode()
+        elif enabled and not silent_parts:
+            # Enable with existing silent parts
+            self.enable_preview_mode()
+        else:
+            # Disable preview mode
+            self.preview_mode = False
+            if hasattr(self, 'video_thread') and self.video_thread:
+                self.video_thread.set_preview_mode(False)
+            print("✓ Preview mode disabled")
+    
     def enable_preview_mode(self):
         """Enable preview mode automatically after silence detection"""
         if not self.silent_parts:
@@ -5818,6 +5842,13 @@ class SilenceCutterApp(QMainWindow):
         
         # Create loading overlay
         self.loading_overlay = None
+        
+        # Initialize manual cutting feature
+        if MANUAL_CUTTING_AVAILABLE:
+            self.manual_cutting_manager = ManualCuttingManager(self)
+            print("✅ Manual cutting manager initialized")
+        else:
+            self.manual_cutting_manager = None
         
         self.setup_ui()
         
@@ -6218,6 +6249,20 @@ class SilenceCutterApp(QMainWindow):
         self.video_player.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.video_player.selection_changed.connect(self.on_video_player_selection_changed)
         video_container_layout.addWidget(self.video_player, 1)
+        
+        # Integrate manual cutting with video player and timeline
+        if MANUAL_CUTTING_AVAILABLE and self.manual_cutting_manager:
+            # Integrate with video player
+            ManualCuttingIntegration.integrate_with_video_player(self.video_player, self.manual_cutting_manager)
+            
+            # Integrate with timeline (timeline is created inside video player)
+            if hasattr(self.video_player, 'timeline_widget'):
+                ManualCuttingIntegration.integrate_with_timeline(self.video_player.timeline_widget, self.manual_cutting_manager)
+                
+                # Connect manual cutting signals to update export button
+                self.manual_cutting_manager.manual_cuts_changed.connect(self.update_export_button_state)
+                
+                print("✅ Manual cutting integrated with timeline and video player")
         
         # Fullscreen button overlay
         self.fullscreen_btn = QPushButton("⛶")
@@ -6715,18 +6760,58 @@ class SilenceCutterApp(QMainWindow):
     def on_video_player_selection_changed(self, changed_part):
         """Handle selection changes from the video player"""
         # This method is called when a silent part selection changes
-        pass
+        self.update_export_button_state()
+        
+    def update_export_button_state(self):
+        """Update export button state based on selected regions"""
+        if not hasattr(self, 'export_btn'):
+            return
+            
+        # Check if there are selected silence regions
+        selected_silence = any(part.get('selected', False) for part in self.silent_parts)
+        
+        # Check if there are selected manual cuts
+        selected_manual_cuts = False
+        if MANUAL_CUTTING_AVAILABLE and self.manual_cutting_manager:
+            selected_manual_cuts = any(cut.get('selected', False) for cut in self.manual_cutting_manager.manual_cuts)
+        
+        # Enable export button if there are any selected regions
+        has_selections = selected_silence or selected_manual_cuts
+        self.export_btn.setEnabled(has_selections and self.video_path is not None)
+        
+        if has_selections:
+            silence_count = sum(1 for part in self.silent_parts if part.get('selected', False))
+            manual_count = 0
+            if MANUAL_CUTTING_AVAILABLE and self.manual_cutting_manager:
+                manual_count = sum(1 for cut in self.manual_cutting_manager.manual_cuts if cut.get('selected', False))
+            
+            total_count = silence_count + manual_count
+            print(f"🔄 Export button enabled: {silence_count} silence regions + {manual_count} manual cuts = {total_count} total")
     
     def process_video(self):
-        if not self.video_path or not self.silent_parts:
+        if not self.video_path:
             return
         
         # Get selected silent parts
         selected_parts = [part for part in self.silent_parts if part.get('selected', False)]
         
-        if not selected_parts:
-            QMessageBox.warning(self, "No Selection", "Please select at least one silent region to process.")
+        # Get selected manual cuts if available
+        manual_cuts = []
+        if MANUAL_CUTTING_AVAILABLE and self.manual_cutting_manager:
+            manual_cuts = [cut for cut in self.manual_cutting_manager.manual_cuts if cut.get('selected', False)]
+        
+        # Combine silent parts and manual cuts
+        all_selected_parts = selected_parts + manual_cuts
+        
+        if not all_selected_parts:
+            if not self.silent_parts and not manual_cuts:
+                QMessageBox.warning(self, "No Regions", "Please detect silence or create manual cuts first.")
+            else:
+                QMessageBox.warning(self, "No Selection", "Please select at least one region (silence or manual cut) to process.")
             return
+        
+        # Sort combined parts by start time for processing
+        all_selected_parts.sort(key=lambda x: x['start'])
         
         # Check if this is an audio file
         is_audio = getattr(self, 'is_audio_only', False)
@@ -6780,9 +6865,9 @@ class SilenceCutterApp(QMainWindow):
         
         # Start the appropriate processing thread
         if is_audio:
-            self.processing_thread = AudioProcessingThread(self.video_path, selected_parts, output_path)
+            self.processing_thread = AudioProcessingThread(self.video_path, all_selected_parts, output_path)
         else:
-            self.processing_thread = ProcessingThread(self.video_path, selected_parts, output_path)
+            self.processing_thread = ProcessingThread(self.video_path, all_selected_parts, output_path)
         
         self.processing_thread.progress_updated.connect(self.update_processing_progress)
         self.processing_thread.processing_complete.connect(self.show_processing_results)
@@ -7202,7 +7287,9 @@ class SilenceCutterApp(QMainWindow):
             ("Ctrl+O", "Open video file"),
             ("Ctrl+E", "Export processed video"),
             ("Ctrl+D", "Detect silence"),
-            ("Esc", "Close dialogs")
+            ("Shift+Click", "Manual cut selection"),
+            ("Ctrl+X", "Cut selected regions"),
+            ("Esc", "Close dialogs/Cancel selection")
         ]
         
         for key, action in shortcuts_data:
