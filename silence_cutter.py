@@ -42,6 +42,26 @@ except ImportError as e:
     print(f"⚠️  Batch processing feature not available: {e}")
     BATCH_PROCESSING_AVAILABLE = False
 
+# Import resolution optimizer
+try:
+    from features.resolution_optimizer import ResolutionOptimizer, ResolutionAwareProcessingMixin
+    RESOLUTION_OPTIMIZER_AVAILABLE = True
+    print("✅ Resolution optimizer loaded successfully")
+except ImportError as e:
+    print(f"⚠️  Resolution optimizer not available: {e}")
+    RESOLUTION_OPTIMIZER_AVAILABLE = False
+    
+    # Create dummy classes for fallback
+    class ResolutionOptimizer:
+        def __init__(self): pass
+        def get_optimized_settings(self, video_path): return {}
+        def print_optimization_summary(self, video_path, settings): pass
+        
+    class ResolutionAwareProcessingMixin:
+        def __init__(self, *args, **kwargs): super().__init__(*args, **kwargs)
+        def set_optimization_settings(self, settings): pass
+        def get_optimized_ffmpeg_params(self, video_codec): return []
+
 class CircularBuffer:
     """High-performance circular buffer for video frames and audio samples"""
     def __init__(self, max_size, item_type="frame"):
@@ -816,17 +836,31 @@ class VideoPlaybackThread(QThread):
             height, width = frame.shape[:2]
             original_size = f"{width}x{height}"
             
-            # Scale to reasonable size that maintains quality but improves performance
-            # Use 720p as target for good quality while still being performant
-            target_width = 1280  # 720p width
+            # Determine target resolution based on input resolution
+            if RESOLUTION_OPTIMIZER_AVAILABLE:
+                # Use adaptive scaling based on input resolution
+                if width >= 7680:  # 8K
+                    target_width = 1920  # 1080p preview for 8K
+                    interpolation = cv2.INTER_AREA  # Better for downscaling
+                elif width >= 3840:  # 4K
+                    target_width = 1920  # 1080p preview for 4K
+                    interpolation = cv2.INTER_AREA
+                elif width >= 1920:  # 1080p
+                    target_width = 1280  # 720p preview for 1080p
+                    interpolation = cv2.INTER_LINEAR
+                else:
+                    target_width = 1280  # 720p target for lower resolutions
+                    interpolation = cv2.INTER_LINEAR
+            else:
+                # Fallback to original behavior
+                target_width = 1280  # 720p width
+                interpolation = cv2.INTER_LINEAR
+            
             if width > target_width:
                 scale = target_width / width
                 new_width = int(width * scale)
                 new_height = int(height * scale)
-                # Use better interpolation for quality
-                frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-                # Scaling applied for performance
-                pass
+                frame = cv2.resize(frame, (new_width, new_height), interpolation=interpolation)
             
             # Convert BGR to RGB (OpenCV uses BGR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -843,17 +877,33 @@ class VideoPlaybackThread(QThread):
     def process_frame_ultra_fast(self, frame):
         """Fast frame processing for preview mode - maintains good quality"""
         try:
-            # Use same quality as fast mode to maintain consistent video quality
             height, width = frame.shape[:2]
             
-            # Use 720p target for consistent quality (same as fast mode)
-            target_width = 1280  # 720p width
+            # Use resolution-aware scaling for ultra-fast mode
+            if RESOLUTION_OPTIMIZER_AVAILABLE:
+                # More aggressive scaling for ultra-fast mode
+                if width >= 7680:  # 8K
+                    target_width = 1280  # 720p preview for 8K ultra-fast
+                    interpolation = cv2.INTER_NEAREST  # Fastest for 8K
+                elif width >= 3840:  # 4K
+                    target_width = 1280  # 720p preview for 4K ultra-fast
+                    interpolation = cv2.INTER_AREA
+                elif width >= 1920:  # 1080p
+                    target_width = 960   # Smaller preview for 1080p ultra-fast
+                    interpolation = cv2.INTER_LINEAR
+                else:
+                    target_width = 1280  # 720p target for lower resolutions
+                    interpolation = cv2.INTER_LINEAR
+            else:
+                # Fallback to original behavior
+                target_width = 1280  # 720p width
+                interpolation = cv2.INTER_LINEAR
+            
             if width > target_width:
                 scale = target_width / width
                 new_width = int(width * scale)
                 new_height = int(height * scale)
-                # Use good interpolation for quality
-                frame = cv2.resize(frame, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+                frame = cv2.resize(frame, (new_width, new_height), interpolation=interpolation)
             
             # Convert BGR to RGB (OpenCV uses BGR)
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -1778,7 +1828,7 @@ class AudioProcessingThread(QThread):
             traceback.print_exc()
             self.processing_complete.emit("")
 
-class ProcessingThread(QThread):
+class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
     progress_updated = pyqtSignal(int)
     processing_complete = pyqtSignal(str)
     
@@ -1788,6 +1838,14 @@ class ProcessingThread(QThread):
         self.silent_parts = silent_parts
         self.output_path = output_path
         self.ffmpeg_path = self.get_ffmpeg_path()
+        
+        # Initialize resolution optimizer if available
+        if RESOLUTION_OPTIMIZER_AVAILABLE:
+            self.resolution_optimizer = ResolutionOptimizer()
+            self.optimization_settings = self.resolution_optimizer.get_optimized_settings(video_path)
+            self.resolution_optimizer.print_optimization_summary(video_path, self.optimization_settings)
+        else:
+            self.optimization_settings = {}
     
     def get_ffmpeg_path(self):
         """Try to find FFmpeg executable path"""
@@ -2057,36 +2115,42 @@ class ProcessingThread(QThread):
                 print(f"MoviePy export using {hw_name}")
                 
                 # Prepare FFmpeg parameters for hardware acceleration
-                ffmpeg_params = ["-pix_fmt", "yuv420p"]  # Standard pixel format
-                
-                if video_codec == 'h264_nvenc':
-                    ffmpeg_params.extend([
-                        "-preset", "fast",
-                        "-rc", "vbr",
-                        "-cq", "23",
-                        "-b:v", "5M",
-                        "-maxrate", "10M",
-                        "-bufsize", "10M"
-                    ])
-                elif video_codec == 'h264_qsv':
-                    ffmpeg_params.extend([
-                        "-preset", "fast",
-                        "-global_quality", "23",
-                        "-look_ahead", "1"
-                    ])
-                elif video_codec == 'h264_amf':
-                    ffmpeg_params.extend([
-                        "-quality", "speed",
-                        "-rc", "vbr_peak",
-                        "-qp_i", "22",
-                        "-qp_p", "24",
-                        "-qp_b", "26"
-                    ])
-                else:  # libx264 (software)
-                    ffmpeg_params.extend([
-                        "-preset", "fast",
-                        "-crf", "23"
-                    ])
+                # Use resolution-optimized parameters if available
+                if RESOLUTION_OPTIMIZER_AVAILABLE and hasattr(self, 'optimization_settings'):
+                    ffmpeg_params = self.get_optimized_ffmpeg_params(video_codec)
+                    print(f"🎯 Using {self.optimization_settings.get('category', 'Unknown')} optimized encoding parameters")
+                else:
+                    # Fallback to standard parameters
+                    ffmpeg_params = ["-pix_fmt", "yuv420p"]  # Standard pixel format
+                    
+                    if video_codec == 'h264_nvenc':
+                        ffmpeg_params.extend([
+                            "-preset", "fast",
+                            "-rc", "vbr",
+                            "-cq", "23",
+                            "-b:v", "5M",
+                            "-maxrate", "10M",
+                            "-bufsize", "10M"
+                        ])
+                    elif video_codec == 'h264_qsv':
+                        ffmpeg_params.extend([
+                            "-preset", "fast",
+                            "-global_quality", "23",
+                            "-look_ahead", "1"
+                        ])
+                    elif video_codec == 'h264_amf':
+                        ffmpeg_params.extend([
+                            "-quality", "speed",
+                            "-rc", "vbr_peak",
+                            "-qp_i", "22",
+                            "-qp_p", "24",
+                            "-qp_b", "26"
+                        ])
+                    else:  # libx264 (software)
+                        ffmpeg_params.extend([
+                            "-preset", "fast",
+                            "-crf", "23"
+                        ])
                 
                 # Export the result with hardware acceleration
                 print(f"Writing output to: {self.output_path}")
@@ -2274,34 +2338,43 @@ class ProcessingThread(QThread):
             ])
             
             # Add codec-specific optimizations
-            if video_codec == 'h264_nvenc':
-                cmd.extend([
-                    '-preset', 'fast',      # NVENC preset for speed
-                    '-rc', 'vbr',          # Variable bitrate
-                    '-cq', '23',           # Quality level (lower = better quality)
-                    '-b:v', '5M',          # Target bitrate
-                    '-maxrate', '10M',     # Max bitrate
-                    '-bufsize', '10M'      # Buffer size
-                ])
-            elif video_codec == 'h264_qsv':
-                cmd.extend([
-                    '-preset', 'fast',     # QuickSync preset
-                    '-global_quality', '23', # Quality level
-                    '-look_ahead', '1'     # Look-ahead for better quality
-                ])
-            elif video_codec == 'h264_amf':
-                cmd.extend([
-                    '-quality', 'speed',   # AMF quality preset
-                    '-rc', 'vbr_peak',     # Rate control
-                    '-qp_i', '22',         # I-frame quality
-                    '-qp_p', '24',         # P-frame quality
-                    '-qp_b', '26'          # B-frame quality
-                ])
-            else:  # libx264 (software)
-                cmd.extend([
-                    '-preset', 'fast',     # x264 preset for speed
-                    '-crf', '23'           # Constant rate factor
-                ])
+            # Use resolution-optimized parameters if available
+            if RESOLUTION_OPTIMIZER_AVAILABLE and hasattr(self, 'optimization_settings'):
+                optimized_params = self.get_optimized_ffmpeg_params(video_codec)
+                # Remove the pixel format since it's already added above
+                optimized_params = [p for p in optimized_params if p != '-pix_fmt' and p != 'yuv420p']
+                cmd.extend(optimized_params)
+                print(f"🎯 Using {self.optimization_settings.get('category', 'Unknown')} optimized FFmpeg parameters")
+            else:
+                # Fallback to standard parameters
+                if video_codec == 'h264_nvenc':
+                    cmd.extend([
+                        '-preset', 'fast',      # NVENC preset for speed
+                        '-rc', 'vbr',          # Variable bitrate
+                        '-cq', '23',           # Quality level (lower = better quality)
+                        '-b:v', '5M',          # Target bitrate
+                        '-maxrate', '10M',     # Max bitrate
+                        '-bufsize', '10M'      # Buffer size
+                    ])
+                elif video_codec == 'h264_qsv':
+                    cmd.extend([
+                        '-preset', 'fast',     # QuickSync preset
+                        '-global_quality', '23', # Quality level
+                        '-look_ahead', '1'     # Look-ahead for better quality
+                    ])
+                elif video_codec == 'h264_amf':
+                    cmd.extend([
+                        '-quality', 'speed',   # AMF quality preset
+                        '-rc', 'vbr_peak',     # Rate control
+                        '-qp_i', '22',         # I-frame quality
+                        '-qp_p', '24',         # P-frame quality
+                        '-qp_b', '26'          # B-frame quality
+                    ])
+                else:  # libx264 (software)
+                    cmd.extend([
+                        '-preset', 'fast',     # x264 preset for speed
+                        '-crf', '23'           # Constant rate factor
+                    ])
             
             # Add audio encoding options
             cmd.extend([

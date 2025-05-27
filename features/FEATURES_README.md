@@ -36,6 +36,22 @@ Enables processing multiple audio and video files at once with the same silence 
 - **Configuration Management**: Save and load batch configurations
 - **Error Handling**: Individual file failures don't stop the entire batch
 
+### 3. Resolution Optimizer Feature
+
+**File:** `resolution_optimizer.py`  
+**Status:** ✅ Fully Implemented and Tested
+
+**NEW!** Automatically detects video resolution and applies appropriate optimizations for 4K/8K processing while maintaining current functionality for lower resolutions.
+
+**Key Features:**
+
+- **Automatic Detection**: Categorizes videos as SD, HD, FHD, 4K, 8K, or ULTRA
+- **Adaptive Optimizations**: 4K/8K videos get specialized processing settings
+- **Memory Management**: Intelligent buffer sizing and memory usage estimation
+- **Hardware Acceleration**: Optimized parameters for NVENC, QuickSync, AMF, and x264
+- **System Analysis**: Analyzes RAM, CPU, and storage for optimal settings
+- **Zero Impact**: Lower resolution videos use identical processing as before
+
 ## 🚀 Quick Start
 
 ### Manual Cutting
