@@ -679,8 +679,8 @@ class ManualCuttingIntegration:
                 # Ctrl + X for cutting selected regions
                 if manual_cutting_manager.cut_selected_regions():
                     # Update timeline if available
-                    if hasattr(video_player, 'timeline') and video_player.timeline:
-                        video_player.timeline.update()
+                    if hasattr(video_player, 'timeline_widget') and video_player.timeline_widget:
+                        video_player.timeline_widget.update()
                 event.accept()
                 return
                 
