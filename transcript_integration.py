@@ -13,7 +13,7 @@ import json
 import re
 from collections import Counter
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, 
-                             QScrollArea, QListWidget, QListWidgetItem, QDialog, QMessageBox)
+                             QScrollArea, QListWidget, QListWidgetItem, QDialog, QMessageBox, QLineEdit, QFileDialog, QTextEdit)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer
 from PyQt5.QtGui import QFont, QCursor
 
@@ -274,26 +274,105 @@ class TranscriptWidget(QWidget):
         self.transcript_data = []
         self.current_word_index = -1
         self.word_widgets = []
+        self.editing_mode = False  # Track if we're in full edit mode
+        self.full_text_editor = None  # Will hold the full text editor
         self.setup_ui()
         
     def setup_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(4, 4, 4, 4)
-        layout.setSpacing(0)
+        layout.setSpacing(8)
         
-        # Remove header - no longer needed
+        # Header with download buttons
+        header_layout = QHBoxLayout()
         
-        # Scroll area for transcript (increased height)
+        title_label = QLabel("📝 Live Captions")
+        title_label.setStyleSheet("""
+            QLabel {
+                font-size: 16px;
+                font-weight: 600;
+                color: #f9fafb;
+                padding: 4px 0px;
+            }
+        """)
+        
+        # Download buttons
+        self.download_txt_btn = QPushButton("📄 Download TXT")
+        self.download_txt_btn.setEnabled(False)
+        self.download_txt_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #059669;
+                color: white;
+                padding: 6px 12px;
+                font-weight: 600;
+                font-size: 12px;
+                border-radius: 6px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #047857;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6b7280;
+            }
+        """)
+        self.download_txt_btn.clicked.connect(self.download_txt)
+        
+        self.download_srt_btn = QPushButton("🎬 Download SRT")
+        self.download_srt_btn.setEnabled(False)
+        self.download_srt_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #7c3aed;
+                color: white;
+                padding: 6px 12px;
+                font-weight: 600;
+                font-size: 12px;
+                border-radius: 6px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #6d28d9;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6b7280;
+            }
+        """)
+        self.download_srt_btn.clicked.connect(self.download_srt)
+        
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        header_layout.addWidget(self.download_txt_btn)
+        header_layout.addWidget(self.download_srt_btn)
+        
+        layout.addLayout(header_layout)
+        
+        # Scroll area for transcript with horizontal scrolling enabled
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Enable horizontal scrolling
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.scroll_area.setStyleSheet("""
             QScrollArea {
-                border: 1px solid #374151;
+                border: 2px solid #374151;
                 border-radius: 8px;
                 background-color: #1f2937;
-                min-height: 60px;
+                min-height: 120px;
+                max-height: 120px;
+            }
+            QScrollBar:horizontal {
+                background-color: #374151;
+                height: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:horizontal {
+                background-color: #6b7280;
+                border-radius: 6px;
+                min-width: 20px;
+            }
+            QScrollBar::handle:horizontal:hover {
+                background-color: #9ca3af;
             }
             QScrollBar:vertical {
                 background-color: #374151;
@@ -310,13 +389,14 @@ class TranscriptWidget(QWidget):
             }
         """)
         
-        # Transcript content widget
+        # Transcript content widget with improved layout
         self.transcript_content = QWidget()
         self.transcript_layout = QHBoxLayout(self.transcript_content)
-        self.transcript_layout.setContentsMargins(8, 8, 8, 8)
-        self.transcript_layout.setSpacing(4)
-        self.transcript_layout.addStretch()
+        self.transcript_layout.setContentsMargins(12, 12, 12, 12)  # Better margins
+        self.transcript_layout.setSpacing(4)  # Reduced spacing between words
+        self.transcript_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Left align and center vertically
         
+        # Don't add stretch initially - we'll manage layout manually
         self.scroll_area.setWidget(self.transcript_content)
         layout.addWidget(self.scroll_area)
         
@@ -352,6 +432,12 @@ class TranscriptWidget(QWidget):
         self.display_transcript()
         # Hide status label when transcript is ready
         self.status_label.hide()
+        
+        # Enable download buttons
+        self.download_txt_btn.setEnabled(True)
+        self.download_srt_btn.setEnabled(True)
+        
+        print(f"✅ Transcript ready: {len(transcript_data)} words. Download buttons enabled.")
     
     def on_error_occurred(self, error_message):
         """Handle transcript generation error"""
@@ -371,7 +457,10 @@ class TranscriptWidget(QWidget):
             self.transcript_layout.insertWidget(self.transcript_layout.count() - 1, word_widget)
     
     def create_word_widget(self, word_data, index):
-        """Create clickable word widget"""
+        """Create clickable and editable word widget with double-click to edit full text"""
+        from PyQt5.QtWidgets import QLineEdit
+        
+        # Create word label (display mode only - no edit field per word)
         word_label = QPushButton(word_data['word'])
         word_label.setFlat(True)
         word_label.setCursor(Qt.PointingHandCursor)
@@ -379,30 +468,159 @@ class TranscriptWidget(QWidget):
             QPushButton {
                 background-color: transparent;
                 color: #d1d5db;
-                border: none;
-                padding: 2px 4px;
-                border-radius: 4px;
-                font-size: 13px;
+                border: 1px solid transparent;
+                padding: 6px 8px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: 500;
+                min-width: 30px;
+                margin: 1px;
             }
             QPushButton:hover {
                 background-color: #374151;
                 color: #f9fafb;
+                border: 1px solid #6b7280;
             }
         """)
         
-        # Connect click to seek and start playback
+        # Store references and data
+        word_label.word_data = word_data
+        word_label.word_index = index
+        
+        # Connect signals for seeking (single click)
         def on_word_click():
-            self.seek_requested.emit(word_data['start'])
-            # Also emit a signal to start playback if paused
-            if hasattr(self, 'play_requested'):
-                self.play_requested.emit()
+            if not self.editing_mode:
+                self.seek_requested.emit(word_data['start'])
+                if hasattr(self, 'play_requested'):
+                    self.play_requested.emit()
         
         word_label.clicked.connect(on_word_click)
         
+        # Connect double-click for full text editing
+        def on_double_click(event):
+            if not self.editing_mode:
+                self.start_full_text_edit()
+        
+        word_label.mouseDoubleClickEvent = on_double_click
+        
         return word_label
     
+    def start_full_text_edit(self):
+        """Start full text editing mode with single-line editor"""
+        if self.editing_mode:
+            return
+            
+        self.editing_mode = True
+        
+        # Create single-line full text editor (QLineEdit instead of QTextEdit)
+        self.full_text_editor = QLineEdit()
+        self.full_text_editor.setStyleSheet("""
+            QLineEdit {
+                background-color: #374151;
+                color: #f9fafb;
+                border: 3px solid #8b5cf6;
+                padding: 8px 12px;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+                min-height: 40px;
+            }
+        """)
+        
+        # Set full text content
+        full_text = ' '.join([word['word'] for word in self.transcript_data])
+        self.full_text_editor.setText(full_text)
+        
+        # Replace transcript content with editor
+        # Hide word widgets
+        for widget in self.word_widgets:
+            widget.hide()
+        
+        # Clear layout and add editor
+        for i in reversed(range(self.transcript_layout.count())): 
+            self.transcript_layout.itemAt(i).widget().setParent(None)
+        
+        self.transcript_layout.addWidget(self.full_text_editor)
+        
+        # Focus and select all
+        self.full_text_editor.setFocus()
+        self.full_text_editor.selectAll()
+        
+        # Connect finish editing on focus loss and Enter key
+        self.full_text_editor.editingFinished.connect(self.finish_full_text_edit)
+        self.full_text_editor.returnPressed.connect(self.finish_full_text_edit)
+        
+        print("📝 Single-line text editing mode enabled - press Enter or click outside to save")
+    
+    def finish_full_text_edit(self):
+        """Finish full text editing and update transcript data"""
+        if not self.editing_mode or not self.full_text_editor:
+            return
+            
+        # Get edited text
+        new_text = self.full_text_editor.text().strip()
+        old_text = ' '.join([word['word'] for word in self.transcript_data])
+        
+        if new_text and new_text != old_text:
+            # Update transcript data with new words while preserving timestamps
+            new_words = new_text.split()
+            
+            # Map new words to existing timestamps
+            if len(new_words) <= len(self.transcript_data):
+                # If fewer or same number of words, map directly
+                for i, new_word in enumerate(new_words):
+                    self.transcript_data[i]['word'] = new_word
+                # Remove extra words if fewer
+                if len(new_words) < len(self.transcript_data):
+                    self.transcript_data = self.transcript_data[:len(new_words)]
+            else:
+                # If more words, distribute timing
+                old_count = len(self.transcript_data)
+                new_count = len(new_words)
+                
+                # Update existing words
+                for i in range(old_count):
+                    if i < new_count:
+                        self.transcript_data[i]['word'] = new_words[i]
+                
+                # Add new words with estimated timing
+                if old_count > 0:
+                    last_end = self.transcript_data[-1]['end']
+                    word_duration = 0.5  # Default 0.5 seconds per new word
+                    
+                    for i in range(old_count, new_count):
+                        start_time = last_end + (i - old_count) * word_duration
+                        end_time = start_time + word_duration
+                        self.transcript_data.append({
+                            'word': new_words[i],
+                            'start': start_time,
+                            'end': end_time,
+                            'confidence': 0.8
+                        })
+            
+            print(f"✏️  Updated full transcript: {len(self.transcript_data)} words")
+        
+        # Remove editor from layout
+        self.full_text_editor.hide()
+        self.full_text_editor.deleteLater()
+        self.full_text_editor = None
+        self.editing_mode = False
+        
+        # Recreate and display word widgets
+        self.display_transcript()
+        
+        # Enable download buttons if transcript is ready
+        if self.transcript_data:
+            self.download_txt_btn.setEnabled(True)
+            self.download_srt_btn.setEnabled(True)
+        
+        print("📝 Single-line text editing completed")
+    
     def update_current_time(self, time_seconds):
-        """Update highlighting based on current playback time"""
+        """Update highlighting based on current playback time with improved auto-scrolling"""
+        if self.editing_mode:  # Don't update highlighting during edit mode
+            return
+            
         # Find current word
         current_word_index = -1
         for i, word_data in enumerate(self.transcript_data):
@@ -410,53 +628,233 @@ class TranscriptWidget(QWidget):
                 current_word_index = i
                 break
         
-        # Update highlighting
+        # Update highlighting only if word changed
         if current_word_index != self.current_word_index:
             # Remove old highlighting
             if 0 <= self.current_word_index < len(self.word_widgets):
-                self.word_widgets[self.current_word_index].setStyleSheet("""
-                    QPushButton {
-                        background-color: transparent;
-                        color: #d1d5db;
-                        border: none;
-                        padding: 2px 4px;
-                        border-radius: 4px;
-                        font-size: 13px;
-                    }
-                    QPushButton:hover {
-                        background-color: #374151;
-                        color: #f9fafb;
-                    }
-                """)
+                old_widget = self.word_widgets[self.current_word_index]
+                if hasattr(old_widget, 'setStyleSheet'):
+                    old_widget.setStyleSheet("""
+                        QPushButton {
+                            background-color: transparent;
+                            color: #d1d5db;
+                            border: 1px solid transparent;
+                            padding: 6px 8px;
+                            border-radius: 6px;
+                            font-size: 14px;
+                            font-weight: 500;
+                            min-width: 30px;
+                            margin: 1px;
+                        }
+                        QPushButton:hover {
+                            background-color: #374151;
+                            color: #f9fafb;
+                            border: 1px solid #6b7280;
+                        }
+                    """)
             
-            # Add new highlighting
+            # Add new highlighting with prominent border
             if 0 <= current_word_index < len(self.word_widgets):
-                self.word_widgets[current_word_index].setStyleSheet("""
-                    QPushButton {
-                        background-color: #8b5cf6;
-                        color: white;
-                        border: none;
-                        padding: 2px 4px;
-                        border-radius: 4px;
-                        font-size: 13px;
-                        font-weight: bold;
-                    }
-                    QPushButton:hover {
-                        background-color: #7c3aed;
-                        color: white;
-                    }
-                """)
+                current_widget = self.word_widgets[current_word_index]
+                if hasattr(current_widget, 'setStyleSheet'):
+                    current_widget.setStyleSheet("""
+                        QPushButton {
+                            background-color: #8b5cf6;
+                            color: white;
+                            border: 3px solid #a855f7;
+                            padding: 8px 10px;
+                            border-radius: 8px;
+                            font-size: 15px;
+                            font-weight: bold;
+                            min-width: 30px;
+                            margin: 1px;
+                            box-shadow: 0px 0px 15px rgba(139, 92, 246, 0.6);
+                        }
+                        QPushButton:hover {
+                            background-color: #7c3aed;
+                            color: white;
+                            border: 3px solid #9333ea;
+                        }
+                    """)
                 
-                # Auto-scroll to current word
-                self.scroll_to_word(current_word_index)
+                # Auto-scroll to keep current word visible - ensure it happens
+                self.scroll_to_word_centered(current_word_index)
             
             self.current_word_index = current_word_index
     
-    def scroll_to_word(self, word_index):
-        """Scroll to make the specified word visible"""
-        if 0 <= word_index < len(self.word_widgets):
+    def scroll_to_word_centered(self, word_index):
+        """Improved horizontal scrolling to center the specified word"""
+        if 0 <= word_index < len(self.word_widgets) and not self.editing_mode:
+            # Use QTimer.singleShot to ensure scroll happens after layout updates
+            QTimer.singleShot(10, lambda: self._perform_scroll_to_word(word_index))
+    
+    def _perform_scroll_to_word(self, word_index):
+        """Actually perform the scroll operation"""
+        if 0 <= word_index < len(self.word_widgets) and not self.editing_mode:
             widget = self.word_widgets[word_index]
-            self.scroll_area.ensureWidgetVisible(widget)
+            
+            # Ensure widget is visible and has proper geometry
+            if not widget.isVisible():
+                return
+                
+            # Force layout update
+            self.transcript_content.updateGeometry()
+            self.scroll_area.updateGeometry()
+            
+            # Get scroll area dimensions
+            scroll_area = self.scroll_area
+            viewport_width = scroll_area.viewport().width()
+            horizontal_scrollbar = scroll_area.horizontalScrollBar()
+            
+            # Get widget position and dimensions
+            widget_geometry = widget.geometry()
+            widget_x = widget_geometry.x()
+            widget_width = widget_geometry.width()
+            
+            # Calculate the center position of the current word
+            widget_center_x = widget_x + widget_width // 2
+            
+            # Calculate target scroll position to center the word in viewport
+            target_scroll_x = widget_center_x - viewport_width // 2
+            
+            # Get content width and ensure we don't scroll past boundaries
+            content_width = self.transcript_content.width()
+            max_scroll = max(0, content_width - viewport_width)
+            target_scroll_x = max(0, min(target_scroll_x, max_scroll))
+            
+            # Perform the scroll
+            horizontal_scrollbar.setValue(int(target_scroll_x))
+            
+            # Debug info (reduced frequency)
+            if word_index % 15 == 0:  # Log every 15th word
+                print(f"🎯 Auto-scroll: word {word_index} '{widget.text()}' at x={widget_x}, center={widget_center_x}, target_scroll={target_scroll_x}, viewport={viewport_width}")
+
+    def download_txt(self):
+        """Download transcript as TXT file"""
+        if not self.transcript_data:
+            QMessageBox.warning(self, "No Transcript", "No transcript data available to download.")
+            return
+        
+        from PyQt5.QtWidgets import QFileDialog
+        
+        # Get save location
+        filename, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Save Transcript as TXT", 
+            "transcript.txt",
+            "Text Files (*.txt);;All Files (*)"
+        )
+        
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    # Write all words with timestamps (optional format)
+                    f.write("TRANSCRIPT\n")
+                    f.write("=" * 50 + "\n\n")
+                    
+                    current_line = []
+                    words_per_line = 10
+                    
+                    for i, word_data in enumerate(self.transcript_data):
+                        current_line.append(word_data['word'])
+                        
+                        # Start new line every 10 words or at punctuation
+                        if (len(current_line) >= words_per_line or 
+                            word_data['word'].rstrip().endswith(('.', '!', '?')) or
+                            i == len(self.transcript_data) - 1):
+                            
+                            line_text = ' '.join(current_line)
+                            f.write(line_text.strip() + '\n')
+                            current_line = []
+                    
+                    f.write(f"\n\nGenerated: {len(self.transcript_data)} words")
+                
+                QMessageBox.information(self, "Download Complete", f"Transcript saved to:\n{filename}")
+                print(f"📄 TXT transcript saved: {filename}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to save transcript:\n{str(e)}")
+    
+    def download_srt(self):
+        """Download transcript as SRT subtitle file"""
+        if not self.transcript_data:
+            QMessageBox.warning(self, "No Transcript", "No transcript data available to download.")
+            return
+        
+        from PyQt5.QtWidgets import QFileDialog
+        
+        # Get save location
+        filename, _ = QFileDialog.getSaveFileName(
+            self, 
+            "Save Subtitles as SRT", 
+            "subtitles.srt",
+            "Subtitle Files (*.srt);;All Files (*)"
+        )
+        
+        if filename:
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    subtitle_index = 1
+                    current_subtitle = []
+                    subtitle_start = None
+                    subtitle_end = None
+                    max_chars_per_subtitle = 80
+                    max_duration = 5.0  # Maximum 5 seconds per subtitle
+                    
+                    def format_srt_time(seconds):
+                        """Format time for SRT format (HH:MM:SS,mmm)"""
+                        hours = int(seconds // 3600)
+                        minutes = int((seconds % 3600) // 60)
+                        secs = int(seconds % 60)
+                        millis = int((seconds % 1) * 1000)
+                        return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+                    
+                    def write_subtitle():
+                        """Write current subtitle to file"""
+                        if current_subtitle and subtitle_start is not None:
+                            nonlocal subtitle_index
+                            subtitle_text = ' '.join(current_subtitle).strip()
+                            
+                            f.write(f"{subtitle_index}\n")
+                            f.write(f"{format_srt_time(subtitle_start)} --> {format_srt_time(subtitle_end)}\n")
+                            f.write(f"{subtitle_text}\n\n")
+                            
+                            subtitle_index += 1
+                    
+                    for i, word_data in enumerate(self.transcript_data):
+                        word = word_data['word']
+                        word_start = word_data['start']
+                        word_end = word_data['end']
+                        
+                        # Start new subtitle if this is the first word
+                        if subtitle_start is None:
+                            subtitle_start = word_start
+                        
+                        # Add word to current subtitle
+                        current_subtitle.append(word)
+                        subtitle_end = word_end
+                        
+                        # Check if we should end current subtitle
+                        current_text = ' '.join(current_subtitle)
+                        duration = subtitle_end - subtitle_start
+                        
+                        should_end_subtitle = (
+                            len(current_text) >= max_chars_per_subtitle or
+                            duration >= max_duration or
+                            word.rstrip().endswith(('.', '!', '?')) or
+                            i == len(self.transcript_data) - 1
+                        )
+                        
+                        if should_end_subtitle:
+                            write_subtitle()
+                            current_subtitle = []
+                            subtitle_start = None
+                
+                QMessageBox.information(self, "Download Complete", f"Subtitles saved to:\n{filename}")
+                print(f"🎬 SRT subtitles saved: {filename}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to save subtitles:\n{str(e)}")
 
 def integrate_transcript_with_app(app_instance):
     """Integrate transcript functionality with the main application"""
