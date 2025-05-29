@@ -201,12 +201,17 @@ class ManualCuttingManager(QObject):
         if silent_parts:
             for part in silent_parts:
                 if part.get('selected', False):
+                    # Calculate duration_ms if not present
+                    duration_ms = part.get('duration_ms')
+                    if duration_ms is None:
+                        duration_ms = int((part['end'] - part['start']) * 1000)
+                    
                     combined_cuts.append({
                         'start': part['start'],
                         'end': part['end'],
-                        'duration_ms': part['duration_ms'],
+                        'duration_ms': duration_ms,
                         'selected': True,
-                        'type': 'silence'
+                        'type': part.get('type', 'silence')
                     })
                     
         # Sort by start time
