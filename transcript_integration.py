@@ -276,6 +276,7 @@ class TranscriptWidget(QWidget):
         self.word_widgets = []
         self.editing_mode = False  # Track if we're in full edit mode
         self.full_text_editor = None  # Will hold the full text editor
+        self.editing_word_index = -1
         self.setup_ui()
         
     def setup_ui(self):
@@ -351,28 +352,47 @@ class TranscriptWidget(QWidget):
         # Scroll area for transcript with horizontal scrolling enabled
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)  # Enable horizontal scrolling
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)  # Always show horizontal scrollbar for better UX
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        # Enable wheel events for horizontal scrolling when holding Shift
+        self.scroll_area.wheelEvent = self.horizontal_wheel_scroll
+        # Force horizontal scrollbar to be visible
+        self.scroll_area.horizontalScrollBar().setVisible(True)
         self.scroll_area.setStyleSheet("""
             QScrollArea {
                 border: 2px solid #374151;
                 border-radius: 8px;
                 background-color: #1f2937;
-                min-height: 120px;
-                max-height: 120px;
+                min-height: 140px;
+                max-height: 140px;
             }
             QScrollBar:horizontal {
                 background-color: #374151;
-                height: 12px;
-                border-radius: 6px;
+                height: 16px;
+                border-radius: 8px;
+                border: 1px solid #4b5563;
             }
             QScrollBar::handle:horizontal {
                 background-color: #6b7280;
-                border-radius: 6px;
-                min-width: 20px;
+                border-radius: 7px;
+                min-width: 30px;
+                border: 1px solid #9ca3af;
             }
             QScrollBar::handle:horizontal:hover {
                 background-color: #9ca3af;
+            }
+            QScrollBar::handle:horizontal:pressed {
+                background-color: #d1d5db;
+            }
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                background-color: #4b5563;
+                border: 1px solid #6b7280;
+                border-radius: 4px;
+                width: 16px;
+                height: 16px;
+            }
+            QScrollBar::add-line:horizontal:hover, QScrollBar::sub-line:horizontal:hover {
+                background-color: #6b7280;
             }
             QScrollBar:vertical {
                 background-color: #374151;
@@ -396,6 +416,9 @@ class TranscriptWidget(QWidget):
         self.transcript_layout.setSpacing(4)  # Reduced spacing between words
         self.transcript_layout.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Left align and center vertically
         
+        # Ensure content width expands to accommodate all words
+        self.transcript_content.setSizePolicy(self.transcript_content.sizePolicy().Expanding, self.transcript_content.sizePolicy().Fixed)
+        
         # Don't add stretch initially - we'll manage layout manually
         self.scroll_area.setWidget(self.transcript_content)
         layout.addWidget(self.scroll_area)
@@ -412,6 +435,19 @@ class TranscriptWidget(QWidget):
         layout.addWidget(self.status_label)
         
         self.setLayout(layout)
+    
+    def horizontal_wheel_scroll(self, event):
+        """Enhanced horizontal scrolling with Shift+wheel support"""
+        modifiers = event.modifiers()
+        if modifiers == Qt.ShiftModifier:
+            # Horizontal scroll with Shift+wheel
+            delta = event.angleDelta().y()
+            scrollbar = self.scroll_area.horizontalScrollBar()
+            scrollbar.setValue(scrollbar.value() - delta // 4)  # Scroll horizontally
+            event.accept()
+        else:
+            # Default behavior for vertical scrolling
+            QScrollArea.wheelEvent(self.scroll_area, event)
     
     def load_transcript(self, video_path):
         """Start transcript generation"""
@@ -454,7 +490,15 @@ class TranscriptWidget(QWidget):
         for i, word_data in enumerate(self.transcript_data):
             word_widget = self.create_word_widget(word_data, i)
             self.word_widgets.append(word_widget)
-            self.transcript_layout.insertWidget(self.transcript_layout.count() - 1, word_widget)
+            self.transcript_layout.addWidget(word_widget)
+        
+        # Force layout update and ensure horizontal scrollbar appears
+        self.transcript_content.updateGeometry()
+        self.scroll_area.updateGeometry()
+        
+        # Ensure horizontal scrollbar is visible
+        self.scroll_area.horizontalScrollBar().setVisible(True)
+        self.scroll_area.horizontalScrollBar().update()
     
     def create_word_widget(self, word_data, index):
         """Create clickable and editable word widget with double-click to edit full text"""
@@ -464,6 +508,11 @@ class TranscriptWidget(QWidget):
         word_label = QPushButton(word_data['word'])
         word_label.setFlat(True)
         word_label.setCursor(Qt.PointingHandCursor)
+        
+        # Set size policy to allow proper content fitting
+        from PyQt5.QtWidgets import QSizePolicy
+        word_label.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        
         word_label.setStyleSheet("""
             QPushButton {
                 background-color: transparent;
@@ -473,8 +522,9 @@ class TranscriptWidget(QWidget):
                 border-radius: 6px;
                 font-size: 14px;
                 font-weight: 500;
-                min-width: 30px;
                 margin: 1px;
+                min-height: 32px;
+                max-height: 32px;
             }
             QPushButton:hover {
                 background-color: #374151;
@@ -499,137 +549,131 @@ class TranscriptWidget(QWidget):
         # Connect double-click for full text editing
         def on_double_click(event):
             if not self.editing_mode:
-                self.start_full_text_edit()
+                self.start_word_edit(index)
         
         word_label.mouseDoubleClickEvent = on_double_click
         
         return word_label
     
-    def start_full_text_edit(self):
-        """Start full text editing mode with single-line editor"""
-        if self.editing_mode:
+    def start_word_edit(self, index):
+        """Start word editing mode for specific word"""
+        if self.editing_mode or index < 0 or index >= len(self.transcript_data):
             return
             
         self.editing_mode = True
+        self.editing_word_index = index
+        word_data = self.transcript_data[index]
         
-        # Create single-line full text editor (QLineEdit instead of QTextEdit)
-        self.full_text_editor = QLineEdit()
-        self.full_text_editor.setStyleSheet("""
+        # Get the specific word widget
+        word_widget = self.word_widgets[index]
+        
+        # Create single-line word editor
+        self.word_editor = QLineEdit()
+        self.word_editor.setStyleSheet("""
             QLineEdit {
                 background-color: #374151;
                 color: #f9fafb;
                 border: 3px solid #8b5cf6;
-                padding: 8px 12px;
+                padding: 6px 8px;
                 border-radius: 8px;
                 font-size: 14px;
                 font-weight: 500;
-                min-height: 40px;
+                min-height: 32px;
+                max-height: 32px;
             }
         """)
         
-        # Set full text content
-        full_text = ' '.join([word['word'] for word in self.transcript_data])
-        self.full_text_editor.setText(full_text)
+        # Set the word text for editing
+        self.word_editor.setText(word_data['word'])
         
-        # Replace transcript content with editor
-        # Hide word widgets
-        for widget in self.word_widgets:
-            widget.hide()
-        
-        # Clear layout and add editor
-        for i in reversed(range(self.transcript_layout.count())): 
-            self.transcript_layout.itemAt(i).widget().setParent(None)
-        
-        self.transcript_layout.addWidget(self.full_text_editor)
-        
-        # Focus and select all
-        self.full_text_editor.setFocus()
-        self.full_text_editor.selectAll()
-        
-        # Connect finish editing on focus loss and Enter key
-        self.full_text_editor.editingFinished.connect(self.finish_full_text_edit)
-        self.full_text_editor.returnPressed.connect(self.finish_full_text_edit)
-        
-        print("📝 Single-line text editing mode enabled - press Enter or click outside to save")
+        # Replace the specific word widget with editor
+        widget_index = self.transcript_layout.indexOf(word_widget)
+        if widget_index >= 0:
+            # Hide the original widget
+            word_widget.hide()
+            
+            # Insert editor at the same position
+            self.transcript_layout.insertWidget(widget_index, self.word_editor)
+            
+            # Focus and select all text
+            self.word_editor.setFocus()
+            self.word_editor.selectAll()
+            
+            # Connect finish editing on focus loss and Enter key
+            self.word_editor.editingFinished.connect(self.finish_word_edit)
+            self.word_editor.returnPressed.connect(self.finish_word_edit)
+            
+            print(f"📝 Editing word '{word_data['word']}' at index {index}")
     
-    def finish_full_text_edit(self):
-        """Finish full text editing and update transcript data"""
-        if not self.editing_mode or not self.full_text_editor:
+    def finish_word_edit(self):
+        """Finish word editing and update only the specific word"""
+        if not self.editing_mode or not hasattr(self, 'word_editor') or not self.word_editor:
             return
             
         # Get edited text
-        new_text = self.full_text_editor.text().strip()
-        old_text = ' '.join([word['word'] for word in self.transcript_data])
+        new_word = self.word_editor.text().strip()
+        old_word = self.transcript_data[self.editing_word_index]['word']
         
-        if new_text and new_text != old_text:
-            # Update transcript data with new words while preserving timestamps
-            new_words = new_text.split()
-            
-            # Map new words to existing timestamps
-            if len(new_words) <= len(self.transcript_data):
-                # If fewer or same number of words, map directly
-                for i, new_word in enumerate(new_words):
-                    self.transcript_data[i]['word'] = new_word
-                # Remove extra words if fewer
-                if len(new_words) < len(self.transcript_data):
-                    self.transcript_data = self.transcript_data[:len(new_words)]
-            else:
-                # If more words, distribute timing
-                old_count = len(self.transcript_data)
-                new_count = len(new_words)
-                
-                # Update existing words
-                for i in range(old_count):
-                    if i < new_count:
-                        self.transcript_data[i]['word'] = new_words[i]
-                
-                # Add new words with estimated timing
-                if old_count > 0:
-                    last_end = self.transcript_data[-1]['end']
-                    word_duration = 0.5  # Default 0.5 seconds per new word
-                    
-                    for i in range(old_count, new_count):
-                        start_time = last_end + (i - old_count) * word_duration
-                        end_time = start_time + word_duration
-                        self.transcript_data.append({
-                            'word': new_words[i],
-                            'start': start_time,
-                            'end': end_time,
-                            'confidence': 0.8
-                        })
-            
-            print(f"✏️  Updated full transcript: {len(self.transcript_data)} words")
+        if new_word and new_word != old_word:
+            # Update only the specific word in transcript data
+            self.transcript_data[self.editing_word_index]['word'] = new_word
+            print(f"✏️  Updated word {self.editing_word_index}: '{old_word}' -> '{new_word}'")
+        
+        # Get the original widget
+        original_widget = self.word_widgets[self.editing_word_index]
+        
+        # Update the original widget's text
+        original_widget.setText(new_word if new_word else old_word)
         
         # Remove editor from layout
-        self.full_text_editor.hide()
-        self.full_text_editor.deleteLater()
-        self.full_text_editor = None
-        self.editing_mode = False
+        editor_index = self.transcript_layout.indexOf(self.word_editor)
+        if editor_index >= 0:
+            self.transcript_layout.removeWidget(self.word_editor)
         
-        # Recreate and display word widgets
-        self.display_transcript()
+        self.word_editor.hide()
+        self.word_editor.deleteLater()
+        self.word_editor = None
+        
+        # Show the original widget again
+        original_widget.show()
+        
+        self.editing_mode = False
+        self.editing_word_index = -1
         
         # Enable download buttons if transcript is ready
         if self.transcript_data:
             self.download_txt_btn.setEnabled(True)
             self.download_srt_btn.setEnabled(True)
         
-        print("📝 Single-line text editing completed")
+        print("📝 Word editing completed")
     
     def update_current_time(self, time_seconds):
         """Update highlighting based on current playback time with improved auto-scrolling"""
         if self.editing_mode:  # Don't update highlighting during edit mode
             return
+        
+        # Debug output every 3 seconds to see if this method is being called
+        if not hasattr(self, '_last_update_debug_time'):
+            self._last_update_debug_time = 0
+        
+        import time
+        if time.time() - self._last_update_debug_time > 3:
+            print(f"🎵 UPDATE_CURRENT_TIME DEBUG: time_seconds={time_seconds:.2f}, transcript_data_count={len(self.transcript_data) if hasattr(self, 'transcript_data') else 0}")
+            self._last_update_debug_time = time.time()
             
-        # Find current word
+        # Find current word with improved timing tolerance
         current_word_index = -1
         for i, word_data in enumerate(self.transcript_data):
-            if word_data['start'] <= time_seconds <= word_data['end']:
+            # Add small tolerance for better synchronization (±50ms)
+            tolerance = 0.05
+            if (word_data['start'] - tolerance) <= time_seconds <= (word_data['end'] + tolerance):
                 current_word_index = i
                 break
         
         # Update highlighting only if word changed
         if current_word_index != self.current_word_index:
+            print(f"🎵 WORD CHANGED: from {self.current_word_index} to {current_word_index} at {time_seconds:.2f}s")
+            
             # Remove old highlighting
             if 0 <= self.current_word_index < len(self.word_widgets):
                 old_widget = self.word_widgets[self.current_word_index]
@@ -643,8 +687,9 @@ class TranscriptWidget(QWidget):
                             border-radius: 6px;
                             font-size: 14px;
                             font-weight: 500;
-                            min-width: 30px;
                             margin: 1px;
+                            min-height: 32px;
+                            max-height: 32px;
                         }
                         QPushButton:hover {
                             background-color: #374151;
@@ -653,32 +698,40 @@ class TranscriptWidget(QWidget):
                         }
                     """)
             
-            # Add new highlighting with prominent border
+            # Add new highlighting with prominent, animated border for currently playing word
             if 0 <= current_word_index < len(self.word_widgets):
                 current_widget = self.word_widgets[current_word_index]
                 if hasattr(current_widget, 'setStyleSheet'):
                     current_widget.setStyleSheet("""
                         QPushButton {
-                            background-color: #8b5cf6;
+                            background-color: #10b981;
                             color: white;
-                            border: 3px solid #a855f7;
-                            padding: 8px 10px;
+                            border: 3px solid #34d399;
+                            padding: 6px 8px;
                             border-radius: 8px;
-                            font-size: 15px;
+                            font-size: 14px;
                             font-weight: bold;
-                            min-width: 30px;
                             margin: 1px;
-                            box-shadow: 0px 0px 15px rgba(139, 92, 246, 0.6);
+                            box-shadow: 0px 0px 20px rgba(16, 185, 129, 0.8);
+                            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+                            min-height: 32px;
+                            max-height: 32px;
                         }
                         QPushButton:hover {
-                            background-color: #7c3aed;
+                            background-color: #059669;
                             color: white;
-                            border: 3px solid #9333ea;
+                            border: 3px solid #10b981;
+                            box-shadow: 0px 0px 25px rgba(16, 185, 129, 1.0);
                         }
                     """)
                 
-                # Auto-scroll to keep current word visible - ensure it happens
+                # Auto-scroll to keep current word visible and centered
                 self.scroll_to_word_centered(current_word_index)
+                
+                # Debug info for currently playing word (reduced frequency)
+                if current_word_index % 10 == 0:  # Log every 10th word
+                    current_word = self.transcript_data[current_word_index]['word']
+                    print(f"🎵 NOW PLAYING: word {current_word_index} '{current_word}' at {time_seconds:.2f}s")
             
             self.current_word_index = current_word_index
     
@@ -871,6 +924,7 @@ def integrate_transcript_with_app(app_instance):
     app_instance.realtime_timer.start(100)  # Update every 100ms
     
     print(f"✅ DEBUG: Transcript variables initialized")
+    print(f"✅ DEBUG: Realtime timer started: {app_instance.realtime_timer.isActive()}")
     
     # Add transcript widget to the timeline section
     add_transcript_to_timeline(app_instance)
@@ -1218,43 +1272,58 @@ def update_transcript_highlighting(app_instance):
                 app_instance.transcript_data):
             return
         
-        # Get current position from video player with multiple fallbacks
+        # Get current position from video player with multiple fallbacks and improved precision
         current_time = 0
+        debug_source = "none"
         
         if hasattr(app_instance, 'video_player') and app_instance.video_player:
-            # Try multiple methods to get current time
+            # Try multiple methods to get current time - use the original working priority order
+            
+            # Priority 1: Try media player position (most reliable for real-time highlighting)
             if hasattr(app_instance.video_player, 'media_player') and app_instance.video_player.media_player:
                 try:
                     position_ms = app_instance.video_player.media_player.position()
                     if position_ms >= 0:
                         current_time = position_ms / 1000.0
+                        debug_source = "media_player"
                 except:
                     pass
             
-            # Fallback: try timeline widget
+            # Priority 2: Try timeline widget
             if current_time == 0 and hasattr(app_instance.video_player, 'timeline_widget'):
                 try:
                     timeline_pos = getattr(app_instance.video_player.timeline_widget, 'current_position', 0)
                     if timeline_pos > 0:
                         current_time = timeline_pos
+                        debug_source = "timeline_widget"
                 except:
                     pass
             
-            # Fallback: try threaded video player
-            if current_time == 0 and hasattr(app_instance.video_player, 'video_thread'):
+            # Priority 3: Try threaded video player as fallback
+            if current_time == 0 and hasattr(app_instance.video_player, 'video_thread') and app_instance.video_player.video_thread:
                 try:
                     thread_pos = getattr(app_instance.video_player.video_thread, 'current_time_seconds', 0)
                     if thread_pos > 0:
                         current_time = thread_pos
+                        debug_source = "video_thread"
                 except:
                     pass
         
-        # Update transcript highlighting
+        # Debug output every 2 seconds to see what's happening
+        if not hasattr(update_transcript_highlighting, '_last_debug_time'):
+            update_transcript_highlighting._last_debug_time = 0
+        
+        if time.time() - update_transcript_highlighting._last_debug_time > 2:
+            print(f"🎵 HIGHLIGHTING DEBUG: current_time={current_time:.2f}, source={debug_source}, transcript_data_count={len(app_instance.transcript_data) if hasattr(app_instance, 'transcript_data') else 0}")
+            update_transcript_highlighting._last_debug_time = time.time()
+        
+        # Update transcript highlighting - always call, even with current_time = 0
         app_instance.transcript_widget.update_current_time(current_time)
         
     except Exception as e:
-        # Silently handle errors to prevent disrupting playback
-        pass
+        print(f"❌ ERROR in update_transcript_highlighting: {e}")
+        import traceback
+        traceback.print_exc()
 
 def start_transcript_generation(app_instance, video_path):
     """Start transcript generation when video is loaded"""
@@ -1340,6 +1409,9 @@ def on_transcript_ready(app_instance, transcript_data):
     if hasattr(app_instance, 'repeated_words_btn'):
         app_instance.repeated_words_btn.setEnabled(True)
     
+    # Ensure realtime timer is running for highlighting
+    ensure_realtime_timer_running(app_instance)
+    
     print(f"✅ Transcript ready with {len(transcript_data)} words")
 
 def on_transcript_progress(app_instance, progress, status):
@@ -1400,4 +1472,22 @@ def apply_repeated_word_removal(app_instance, repeated_segments):
         "Repeated Words Added", 
         f"Added {len(repeated_as_silence)} repeated word segments for removal.\n"
         f"Additional time savings: {total_time_saved:.1f} seconds"
-    ) 
+    )
+
+def ensure_realtime_timer_running(app_instance):
+    """Ensure the realtime timer is running for transcript highlighting"""
+    try:
+        if hasattr(app_instance, 'realtime_timer'):
+            if not app_instance.realtime_timer.isActive():
+                print("🔧 Restarting realtime timer for transcript highlighting")
+                app_instance.realtime_timer.start(100)
+            else:
+                print(f"✅ Realtime timer is active (interval: {app_instance.realtime_timer.interval()}ms)")
+        else:
+            print("❌ No realtime timer found - creating new one")
+            app_instance.realtime_timer = QTimer()
+            app_instance.realtime_timer.timeout.connect(lambda: update_transcript_highlighting(app_instance))
+            app_instance.realtime_timer.start(100)
+            print("✅ New realtime timer created and started")
+    except Exception as e:
+        print(f"❌ Error with realtime timer: {e}") 
