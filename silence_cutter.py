@@ -3692,7 +3692,7 @@ class TimelineWidget(QWidget):
         if self.zoom_level > 1.0:
             old_zoom = self.zoom_level
             self.zoom_level = max(1.0, self.zoom_level / 1.2)
-            
+        
             # Adjust offset to keep playhead centered during zoom out
             if old_zoom != self.zoom_level and self.duration_seconds > 0:
                 playhead_ratio = self.current_position / self.duration_seconds
@@ -8676,7 +8676,7 @@ class TimelineWidget(QWidget):
             self.zoom_out()
             return
             
-    
+                
         # Store state before any changes for undo functionality
         import copy
         self.drag_start_state = (copy.deepcopy(self.silent_parts), copy.deepcopy(self.silent_ranges))
@@ -12562,7 +12562,7 @@ class TimelineWidget(QWidget):
         if self.zoom_level > 1.0:
             old_zoom = self.zoom_level
             self.zoom_level = max(1.0, self.zoom_level / 1.2)
-            
+        
             # Adjust offset to keep playhead centered during zoom out
             if old_zoom != self.zoom_level and self.duration_seconds > 0:
                 playhead_ratio = self.current_position / self.duration_seconds
@@ -16930,15 +16930,243 @@ class SilenceCutterApp(QMainWindow):
             print(f"⚠️ Error disabling optimizations: {e}")
     
     def clear_previous_data(self):
-        """Clear all previous video data and reset UI state"""
+        """Clear all previous video/audio data and completely reset interface to pristine state"""
         try:
-            # Reset video path and silent parts
+            # Reset core data
             self.video_path = None
             self.is_audio_only = False
             self.silent_parts = []
             self.silent_ranges = []
             
-            # Reset UI elements
+            # === CAPTION/TRANSCRIPT COMPLETE RESET ===
+            if hasattr(self, 'transcript_data'):
+                self.transcript_data = []
+            
+            # Clear all forms of caption/transcript text widgets
+            if hasattr(self, 'caption_text'):
+                self.caption_text.clear()
+                self.caption_text.setPlainText("")  # Ensure text widget is completely empty
+                self.caption_text.update()  # Force visual update
+                
+            if hasattr(self, 'transcript_label'):
+                self.transcript_label.setText("")
+                self.transcript_label.update()
+                
+            # Clear transcript widget completely with all its components
+            if hasattr(self, 'transcript_widget') and self.transcript_widget:
+                try:
+                    # Clear all transcript data
+                    self.transcript_widget.transcript_data = []
+                    if hasattr(self.transcript_widget, 'word_widgets'):
+                        # Delete all word widgets
+                        for widget in self.transcript_widget.word_widgets:
+                            if widget:
+                                widget.deleteLater()
+                        self.transcript_widget.word_widgets = []
+                    
+                    self.transcript_widget.current_word_index = -1
+                    
+                    # Reset UI elements
+                    if hasattr(self.transcript_widget, 'status_label'):
+                        self.transcript_widget.status_label.setText("No transcript loaded")
+                        self.transcript_widget.status_label.show()
+                    if hasattr(self.transcript_widget, 'download_txt_btn'):
+                        self.transcript_widget.download_txt_btn.setEnabled(False)
+                    if hasattr(self.transcript_widget, 'download_srt_btn'):
+                        self.transcript_widget.download_srt_btn.setEnabled(False)
+                    
+                    # Clear transcript layout completely
+                    if hasattr(self.transcript_widget, 'transcript_layout'):
+                        while self.transcript_widget.transcript_layout.count():
+                            item = self.transcript_widget.transcript_layout.takeAt(0)
+                            if item and item.widget():
+                                item.widget().deleteLater()
+                    
+                    # Force complete visual update
+                    if hasattr(self.transcript_widget, 'scroll_area'):
+                        self.transcript_widget.scroll_area.update()
+                    if hasattr(self.transcript_widget, 'transcript_content'):
+                        self.transcript_widget.transcript_content.update()
+                    self.transcript_widget.update()
+                    self.transcript_widget.repaint()
+                    
+                    print("✅ Transcript widget completely cleared")
+                except Exception as e:
+                    print(f"⚠️ Error clearing transcript widget: {e}")
+            
+            # Clear any enhanced transcript widgets
+            if hasattr(self, 'enhanced_transcript_widget') and self.enhanced_transcript_widget:
+                try:
+                    self.enhanced_transcript_widget.transcript_data = []
+                    if hasattr(self.enhanced_transcript_widget, 'clear_transcript'):
+                        self.enhanced_transcript_widget.clear_transcript()
+                except:
+                    pass
+            
+            # === VIDEO/AUDIO PREVIEW COMPLETE RESET ===
+            if hasattr(self, 'video_player'):
+                # Stop and clear media player completely
+                if hasattr(self.video_player, 'media_player') and self.video_player.media_player:
+                    self.video_player.media_player.stop()
+                    self.video_player.media_player.setMedia(None)
+                    self.video_player.media_player.setPosition(0)
+                
+                # Clear video display
+                if hasattr(self.video_player, 'video_widget'):
+                    try:
+                        # Reset video widget to blank state
+                        self.video_player.video_widget.update()
+                    except:
+                        pass
+                
+                # Clear video frame label
+                if hasattr(self.video_player, 'video_frame_label'):
+                    self.video_player.video_frame_label.clear()
+                    self.video_player.video_frame_label.setText("No video loaded")
+                
+                # Clean up all video player resources
+                self.video_player.cleanup_fallback_resources()
+            
+            # === INTERACTIVE TIMELINE COMPLETE RESET ===
+            if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
+                timeline = self.video_player.timeline_widget
+                
+                # STOP ALL TIMELINE TIMERS FIRST
+                if hasattr(timeline, 'animation_timer') and timeline.animation_timer:
+                    timeline.animation_timer.stop()
+                
+                # CLEAR ALL TIMELINE DATA COMPLETELY
+                timeline.set_duration(0)
+                timeline.set_silent_parts([], [])
+                timeline.silent_parts = []
+                timeline.silent_ranges = []
+                timeline.current_position = 0
+                timeline.duration_seconds = 0
+                timeline.video_path = None
+                
+                # CLEAR ANIMATION STATE
+                timeline.target_position = 0
+                
+                # CLEAR DEBUG STATE
+                timeline.debug_click_position = None
+                timeline.debug_click_x = None
+                
+                # RESET ZOOM AND VIEW COMPLETELY
+                timeline.zoom_level = 1.0
+                timeline.zoom_offset = 0.0
+                timeline.min_zoom = 1.0
+                timeline.max_zoom = 10.0
+                if hasattr(timeline, 'reset_zoom'):
+                    timeline.reset_zoom()
+                
+                # CLEAR ALL WAVEFORM DATA COMPLETELY
+                timeline.waveform_data = None
+                timeline.waveform_max_amplitude = 0
+                if hasattr(timeline, 'waveform_cache'):
+                    timeline.waveform_cache.clear()
+                    # Force cache rebuild on next load
+                    timeline.cache_enabled = True
+                    timeline.cache_during_loading = False
+                
+                # CLEAR UNDO/REDO HISTORY COMPLETELY
+                timeline.history = []
+                timeline.history_index = -1
+                
+                # RESET ALL INTERACTION STATE COMPLETELY
+                timeline.dragging_region = None
+                timeline.dragging_edge = None
+                timeline.drag_start_pos = None
+                timeline.drag_start_state = None
+                timeline.hover_region = None
+                timeline.seeking = False
+                timeline.preview_mode = False
+                
+                # CLEAR ALL CACHED VISUAL DATA
+                if hasattr(timeline, 'cached_regions'):
+                    timeline.cached_regions = []
+                if hasattr(timeline, 'drawn_regions'):
+                    timeline.drawn_regions = []
+                if hasattr(timeline, 'reset_button_rect'):
+                    timeline.reset_button_rect = None
+                if hasattr(timeline, 'zoom_in_button_rect'):
+                    timeline.zoom_in_button_rect = None
+                if hasattr(timeline, 'zoom_out_button_rect'):
+                    timeline.zoom_out_button_rect = None
+                
+                # CLEAR TOOLTIP STATE
+                timeline.setToolTip("")
+                
+                # FORCE COMPLETE VISUAL AND DATA RESET
+                timeline.update()
+                timeline.repaint()
+                
+                # ADDITIONAL FORCED CLEARING WITH DELAY
+                from PyQt5.QtCore import QTimer
+                from PyQt5.QtWidgets import QApplication
+                
+                def force_timeline_clear():
+                    try:
+                        # AGGRESSIVE SECOND PASS CLEARING - REMOVE ALL VISUAL ARTIFACTS
+                        timeline.silent_parts = []
+                        timeline.silent_ranges = []
+                        timeline.waveform_data = None
+                        
+                        # FORCE CLEAR ALL VISUAL STATES
+                        timeline.current_position = 0
+                        timeline.duration_seconds = 0
+                        timeline.target_position = 0
+                        
+                        # CLEAR WIDGET INTERNAL STATES
+                        if hasattr(timeline, 'waveform_cache'):
+                            timeline.waveform_cache.clear()
+                        
+                        # FORCE WIDGET GEOMETRY UPDATE
+                        timeline.updateGeometry()
+                        timeline.adjustSize()
+                        
+                        # MULTIPLE VISUAL UPDATES TO FORCE REDRAW
+                        timeline.update()
+                        timeline.repaint()
+                        QApplication.processEvents()
+                        timeline.update()
+                        timeline.repaint()
+                        QApplication.processEvents()
+                        
+                        print("✅ Timeline aggressively force-cleared - all visual artifacts removed")
+                    except:
+                        pass
+                
+                def ultra_timeline_clear():
+                    try:
+                        # ULTRA AGGRESSIVE THIRD PASS - NUCLEAR OPTION
+                        timeline.silent_parts = []
+                        timeline.silent_ranges = []
+                        timeline.waveform_data = None
+                        timeline.waveform_max_amplitude = 0
+                        timeline.current_position = 0
+                        timeline.duration_seconds = 0
+                        
+                        # FORCE COMPLETE WIDGET REFRESH
+                        timeline.hide()
+                        QApplication.processEvents()
+                        timeline.show()
+                        QApplication.processEvents()
+                        
+                        # FINAL CLEARING
+                        timeline.update()
+                        timeline.repaint()
+                        
+                        print("✅ Timeline ultra-cleared - complete visual reset")
+                    except:
+                        pass
+                
+                # Schedule multiple delayed clearing passes to ensure complete removal
+                QTimer.singleShot(100, force_timeline_clear)
+                QTimer.singleShot(300, ultra_timeline_clear)  # Ultra aggressive clearing
+                
+                print("✅ Interactive timeline completely cleared")
+            
+            # === UI ELEMENTS RESET ===
             if hasattr(self, 'file_label'):
                 self.file_label.setText("No file selected")
             
@@ -16952,33 +17180,62 @@ class SilenceCutterApp(QMainWindow):
                 self.progress_bar.setVisible(False)
                 self.progress_bar.setValue(0)
             
+            # Clear all result displays
+            if hasattr(self, 'results_list'):
+                self.results_list.clear()
+            
+            # Reset sliders to default values
+            if hasattr(self, 'threshold_slider'):
+                self.threshold_slider.setValue(-40)  # Default threshold
+            if hasattr(self, 'duration_slider'):
+                self.duration_slider.setValue(1000)  # Default min duration
+            if hasattr(self, 'padding_slider'):
+                self.padding_slider.setValue(100)  # Default padding
+            
+            # === FEATURES COMPLETE RESET ===
+            
+            # Clear manual cuts completely
+            if hasattr(self, 'manual_cut_overlay') and self.manual_cut_overlay:
+                self.manual_cut_overlay.clear_all_cuts()
+                self.manual_cut_overlay.reset_state()
+            
+            # Reset batch processing
+            if hasattr(self, 'batch_widget') and self.batch_widget:
+                try:
+                    self.batch_widget.clear_files()
+                    self.batch_widget.reset_interface()
+                except:
+                    pass
+            
+            # Clear any resolution optimizer data
+            if hasattr(self, 'resolution_optimizer'):
+                try:
+                    self.resolution_optimizer = None
+                except:
+                    pass
+            
+            # === SYSTEM CLEANUP ===
+            
             # Hide any processing modals
             self.hide_processing_modal()
             
-            # Clear video player
-            if hasattr(self, 'video_player'):
-                self.video_player.cleanup_fallback_resources()
-                
-                # Clear timeline
-                if hasattr(self.video_player, 'timeline_widget'):
-                    timeline = self.video_player.timeline_widget
-                    timeline.set_duration(0)
-                    timeline.set_silent_parts([], [])
-                    timeline.update()
-            
-            # Clean up any running timers
+            # Stop all running timers
             for attr_name in dir(self):
                 attr = getattr(self, attr_name)
                 if isinstance(attr, QTimer) and attr.isActive():
                     attr.stop()
             
-            # Clean up buffers
+            # Clean up all buffers and caches
             self.cleanup_buffers()
             
-            print("🧹 Previous data cleared")
+            # Force garbage collection for memory cleanup
+            import gc
+            gc.collect()
+            
+            print("✅ Complete interface reset successful - pristine state ready for new file")
             
         except Exception as e:
-            print(f"⚠️ Error clearing previous data: {e}")
+            print(f"⚠️ Error during complete interface reset: {e}")
     
     def show_loading_overlay(self, message="Loading..."):
         """Show loading overlay with message"""
@@ -17602,14 +17859,109 @@ class SilenceCutterApp(QMainWindow):
     
     def keyPressEvent(self, event):
         """Handle keyboard shortcuts"""
-        if event.key() == Qt.Key_F11:
+        # Check for modifier combinations first
+        if event.modifiers() == Qt.ControlModifier:
+            if event.key() == Qt.Key_O:
+                # Ctrl+O: Open file
+                self.select_video()
+                event.accept()
+                return
+            elif event.key() == Qt.Key_N:
+                # Ctrl+N: New - Complete application reset
+                self.new_project()
+                event.accept()
+                return
+        
+        # Check for individual key shortcuts
+        if event.key() == Qt.Key_Space:
+            # Spacebar: Play/Pause video
+            if hasattr(self, 'video_player') and self.video_player:
+                self.video_player.toggle_play_pause()
+                event.accept()
+                return
+        elif event.key() == Qt.Key_F11:
             self.toggle_fullscreen()
             event.accept()
+            return
         elif event.key() == Qt.Key_Escape and self.is_fullscreen:
             self.exit_fullscreen()
             event.accept()
-        else:
-            super().keyPressEvent(event)
+            return
+        
+        # Call parent implementation for unhandled keys
+        super().keyPressEvent(event)
+    
+    def new_project(self):
+        """Create a new project with complete application reset"""
+        # Show confirmation dialog
+        from PyQt5.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self,
+            "New Project",
+            "Are you sure you want to start a new project?\n\nThis will clear all current data and reset the application to its initial state.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                # Perform complete application reset
+                self.clear_previous_data()
+                
+                # Additional reset for new project
+                self.video_path = None
+                self.is_audio_only = False
+                
+                # Reset UI to initial state
+                if hasattr(self, 'file_label'):
+                    self.file_label.setText("No file selected")
+                
+                # Clear any remaining UI elements
+                if hasattr(self, 'results_list'):
+                    self.results_list.clear()
+                
+                # Reset buttons to initial state
+                if hasattr(self, 'detect_btn'):
+                    self.detect_btn.setEnabled(False)
+                if hasattr(self, 'process_btn'):
+                    self.process_btn.setEnabled(False)
+                
+                # Reset sliders to default values
+                if hasattr(self, 'threshold_slider'):
+                    self.threshold_slider.setValue(-40)
+                if hasattr(self, 'duration_slider'):
+                    self.duration_slider.setValue(1000)
+                if hasattr(self, 'padding_slider'):
+                    self.padding_slider.setValue(100)
+                
+                # Hide any dialogs or overlays
+                if hasattr(self, 'loading_overlay') and self.loading_overlay:
+                    self.loading_overlay.hide_loading()
+                
+                self.hide_processing_modal()
+                
+                # Force complete GUI update
+                from PyQt5.QtWidgets import QApplication
+                QApplication.processEvents()
+                self.update()
+                self.repaint()
+                
+                print("✅ New project created - application completely reset")
+                
+                # Show success message
+                QMessageBox.information(
+                    self,
+                    "New Project",
+                    "New project created successfully!\n\nThe application has been reset to its initial state."
+                )
+                
+            except Exception as e:
+                print(f"⚠️ Error creating new project: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to create new project:\n{str(e)}"
+                )
 
 # Clean up any temporary files on exit
 def cleanup_temp_files():

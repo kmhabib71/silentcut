@@ -658,7 +658,7 @@ class TranscriptWidget(QWidget):
         
         import time
         if time.time() - self._last_update_debug_time > 3:
-            print(f"🎵 UPDATE_CURRENT_TIME DEBUG: time_seconds={time_seconds:.2f}, transcript_data_count={len(self.transcript_data) if hasattr(self, 'transcript_data') else 0}")
+            # print(f"🎵 UPDATE_CURRENT_TIME DEBUG: time_seconds={time_seconds:.2f}, transcript_data_count={len(self.transcript_data) if hasattr(self, 'transcript_data') else 0}")
             self._last_update_debug_time = time.time()
             
         # Find current word with improved timing tolerance
@@ -1313,7 +1313,7 @@ def update_transcript_highlighting(app_instance):
             update_transcript_highlighting._last_debug_time = 0
         
         if time.time() - update_transcript_highlighting._last_debug_time > 2:
-            print(f"🎵 HIGHLIGHTING DEBUG: current_time={current_time:.2f}, source={debug_source}, transcript_data_count={len(app_instance.transcript_data) if hasattr(app_instance, 'transcript_data') else 0}")
+            # print(f"🎵 HIGHLIGHTING DEBUG: current_time={current_time:.2f}, source={debug_source}, transcript_data_count={len(app_instance.transcript_data) if hasattr(app_instance, 'transcript_data') else 0}")
             update_transcript_highlighting._last_debug_time = time.time()
         
         # Update transcript highlighting - always call, even with current_time = 0
