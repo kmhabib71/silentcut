@@ -11,6 +11,8 @@ Your Silence Cutter application now includes powerful transcript functionality t
 - **Live word highlighting** during video playback
 - **Fast multi-method transcript generation** with fallbacks
 
+--
+
 ## 🚀 Quick Start
 
 1. **Launch the Application**
