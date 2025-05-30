@@ -1,3 +1,0 @@
-@echo off
-echo Starting Video Silence Cutter with administrator privileges...
-powershell -Command "Start-Process 'python' -ArgumentList 'silence_cutter.py' -Verb RunAs" 
