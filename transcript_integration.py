@@ -704,24 +704,23 @@ class TranscriptWidget(QWidget):
                 if hasattr(current_widget, 'setStyleSheet'):
                     current_widget.setStyleSheet("""
                         QPushButton {
-                            background-color: #10b981;
-                            color: white;
-                            border: 3px solid #34d399;
+                            background-color: transparent;
+                            color: #d1d5db;
+                            border: 1px solid transparent;
+                            border-bottom: 3px solid #10b981;
                             padding: 6px 8px;
-                            border-radius: 8px;
+                            border-radius: 6px;
                             font-size: 14px;
                             font-weight: bold;
                             margin: 1px;
-                            box-shadow: 0px 0px 20px rgba(16, 185, 129, 0.8);
-                            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
                             min-height: 32px;
                             max-height: 32px;
                         }
                         QPushButton:hover {
-                            background-color: #059669;
-                            color: white;
-                            border: 3px solid #10b981;
-                            box-shadow: 0px 0px 25px rgba(16, 185, 129, 1.0);
+                            background-color: #374151;
+                            color: #f9fafb;
+                            border: 1px solid #6b7280;
+                            border-bottom: 3px solid #10b981;
                         }
                     """)
                 
