@@ -25,9 +25,7 @@ try:
     from ai_audio_analysis.integration.silence_cutter import SilenceCutterIntegration, AIAudioAnalysisUI
     from ai_audio_analysis.core.processor import AnalysisResult
     AI_AVAILABLE = True
-    print("🤖 AI Audio Analysis loaded successfully")
 except ImportError as e:
-    print(f"⚠️  AI Audio Analysis not available: {e}")
     AI_AVAILABLE = False
     # Create dummy classes for fallback
     class IntelligentAudioProcessor:
@@ -190,11 +188,9 @@ class SimpleAIAnalyzer:
                     if not is_duplicate:
                         filler_cuts.append(speech_cut)
                         
-                print(f"🗣️ Speech recognition found {len(speech_cuts)} additional filler words")
             except ImportError:
-                print("🔍 Speech recognition not available, using pattern analysis only")
+                pass
             
-            print(f"🗣️ Total detected {len(filler_cuts)} filler words/patterns")
             
         except Exception as e:
             print(f"❌ Advanced filler detection error: {e}")
@@ -438,7 +434,6 @@ class SimpleAIAnalyzer:
             rustle_cuts = self._detect_rustling_advanced(audio_path)
             unwanted_cuts.extend(rustle_cuts)
             
-            print(f"🔇 Detected {len(unwanted_cuts)} unwanted sounds")
             
         except Exception as e:
             print(f"❌ Unwanted sound detection error: {e}")
@@ -499,7 +494,6 @@ class SimpleAIAnalyzer:
                                 'type': 'cough'
                             })
             
-            print(f"🤧 Detected {len(cough_cuts)} potential coughs")
             
         except Exception as e:
             print(f"❌ Cough detection error: {e}")
@@ -611,7 +605,6 @@ class SimpleAIAnalyzer:
                             'type': 'click'
                         })
             
-            print(f"🖱️ Detected {len(click_cuts)} potential clicks")
             
         except Exception as e:
             print(f"❌ Click detection error: {e}")
@@ -672,7 +665,6 @@ class SimpleAIAnalyzer:
                                 'type': 'rustling'
                             })
             
-            print(f"📄 Detected {len(rustle_cuts)} potential rustling sounds")
             
         except Exception as e:
             print(f"❌ Rustling detection error: {e}")
@@ -759,7 +751,6 @@ class SimpleAIAnalyzer:
                     'recommendation': 'Apply noise reduction filter',
                     'rms_db': rms_level
                 }
-                print(f"🔇 Audio quality analysis: RMS {rms_level:.1f}dB")
             
         except Exception as e:
             print(f"❌ Audio quality analysis error: {e}")
@@ -855,31 +846,24 @@ class AIAnalysisThread(QThread):
         
     def run(self):
         try:
-            print(f"🧵 AI Thread started for: {self.video_path}")
-            print(f"🧵 AI Settings: {self.ai_settings}")
-            print(f"🧵 Traditional cuts: {len(self.traditional_cuts)} cuts")
             
             # Use our simplified AI analyzer
             analyzer = SimpleAIAnalyzer(self.ai_settings)
             
             # Progress callback
             def progress_callback(message, progress):
-                print(f"🧵 AI Progress: {message} ({progress}%)")
                 self.progress_updated.emit(message, progress)
             
             # Perform AI analysis
-            print("🧵 Starting AI analysis...")
             ai_results = analyzer.analyze_audio_file(
                 self.video_path,
                 self.traditional_cuts,
                 progress_callback
             )
             
-            print(f"🧵 AI Analysis complete! Results: {ai_results.get('status', 'unknown')}")
             self.analysis_complete.emit(ai_results)
             
         except Exception as e:
-            print(f"🧵 ❌ AI Thread error: {str(e)}")
             import traceback
             traceback.print_exc()
             self.error_occurred.emit(f"AI analysis failed: {str(e)}")
@@ -1360,7 +1344,6 @@ class AIAudioIntegration:
             self.integration = None
             
         self.logger = logging.getLogger(__name__)
-        print(f"🤖 AI Integration initialized with settings: {self.ai_settings}")
         
     def create_ai_tab(self, tab_widget):
         """Create AI features tab for the main application"""
@@ -1389,11 +1372,9 @@ class AIAudioIntegration:
     def enhance_silence_detection(self, video_path, traditional_cuts):
         """Enhance traditional silence detection with AI"""
         if not self.ai_settings.get('enabled', False):
-            print("⚠️ AI enhancement skipped - AI not enabled in settings")
             return traditional_cuts
             
         try:
-            print("🚀 Starting AI analysis thread...")
             # Start AI analysis in background
             self.ai_thread = AIAnalysisThread(
                 video_path, 
@@ -1412,7 +1393,6 @@ class AIAudioIntegration:
                 "Analyzing audio with AI features..."
             )
             
-            print("🧵 Starting AI analysis thread...")
             self.ai_thread.start()
             
             return traditional_cuts  # Return traditional cuts immediately
@@ -1430,7 +1410,6 @@ class AIAudioIntegration:
         try:
             # Apply AI audio enhancements for preview
             if self.ai_settings.get('enhancement_enabled', False):
-                print("🤖 Applying AI audio enhancements for preview...")
                 
                 # Simulate AI enhancement effects for preview
                 enhancement_effects = []
@@ -1444,7 +1423,7 @@ class AIAudioIntegration:
                     enhancement_effects.append("Speech Clarity Optimization")
                     
                 if enhancement_effects:
-                    print(f"🎵 AI Preview Enhancements Active: {', '.join(enhancement_effects)}")
+                    pass
                     
             # Apply AI detection features for preview
             detection_effects = []
@@ -1458,7 +1437,7 @@ class AIAudioIntegration:
                 detection_effects.append("Dramatic Pause Preservation")
                 
             if detection_effects:
-                print(f"🎯 AI Preview Detection Active: {', '.join(detection_effects)}")
+                pass
                 
             return True
             

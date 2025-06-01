@@ -16,7 +16,6 @@ try:
     PSUTIL_AVAILABLE = True
 except ImportError:
     PSUTIL_AVAILABLE = False
-    print("⚠️  psutil not available, using basic system detection")
 
 
 class ResolutionOptimizer(QObject):
@@ -61,11 +60,6 @@ class ResolutionOptimizer(QObject):
                 'gpu_memory_estimate': 2.0  # Conservative estimate
             }
         
-        print(f"🔍 System Analysis:")
-        print(f"   💾 Total RAM: {capabilities['total_memory_gb']:.1f} GB")
-        print(f"   🖥️  CPU Cores: {capabilities['cpu_cores']} ({capabilities['cpu_threads']} threads)")
-        print(f"   💿 Storage: {'SSD' if capabilities['has_ssd'] else 'HDD'}")
-        print(f"   🎮 GPU Memory: ~{capabilities['gpu_memory_estimate']} GB")
         
         return capabilities
         
@@ -125,7 +119,7 @@ class ResolutionOptimizer(QObject):
                         'file_size': os.path.getsize(video_path)
                     }
         except Exception as e:
-            print(f"⚠️  Error getting video resolution: {e}")
+            pass
             
         return None
         
@@ -149,11 +143,6 @@ class ResolutionOptimizer(QObject):
         height = video_info['height']
         category = self.categorize_resolution(width, height)
         
-        print(f"📹 Video Analysis:")
-        print(f"   📐 Resolution: {width}x{height} ({category})")
-        print(f"   ⏱️  Duration: {video_info['duration']:.1f}s")
-        print(f"   📊 Bitrate: {video_info['bitrate']/1000000:.1f} Mbps" if video_info['bitrate'] else "   📊 Bitrate: Unknown")
-        print(f"   📁 File Size: {video_info['file_size']/1024**2:.1f} MB")
         
         # Get category-specific settings
         if category in ['4K', '8K', 'ULTRA']:
@@ -360,8 +349,6 @@ class ResolutionOptimizer(QObject):
         if hasattr(thread_instance, 'set_preview_target'):
             thread_instance.set_preview_target(settings['preview_settings']['target_width'])
             
-        print(f"✅ Applied {settings['category']} optimizations to processing thread")
-        print(f"   🔧 Optimizations: {', '.join(settings['optimizations_applied'])}")
         
     def get_memory_usage_estimate(self, video_info, settings):
         """Estimate memory usage for the given video and settings"""
@@ -400,18 +387,10 @@ class ResolutionOptimizer(QObject):
         video_info = self.get_video_resolution(video_path)
         memory_info = self.get_memory_usage_estimate(video_info, settings)
         
-        print(f"\n🎯 Optimization Summary for {settings['category']} Video:")
-        print(f"   📐 Resolution: {video_info['width']}x{video_info['height']}" if video_info else "   📐 Resolution: Unknown")
-        print(f"   🎞️  Frame Buffer: {settings['buffer_settings']['frame_buffer_size']} frames")
-        print(f"   🖼️  Preview Target: {settings['preview_settings']['target_width']}p")
-        print(f"   ⚙️  Processing Preset: {settings['processing_settings']['preset']}")
-        print(f"   💾 Est. Memory Usage: {memory_info['estimated_mb']} MB")
         
         if memory_info['warning']:
-            print(f"   ⚠️  {memory_info['warning']}")
+            pass
             
-        print(f"   🔧 Optimizations: {', '.join(settings['optimizations_applied'])}")
-        print()
 
 
 class ResolutionAwareProcessingMixin:
@@ -430,7 +409,6 @@ class ResolutionAwareProcessingMixin:
         if hasattr(self, 'frame_buffer') and 'buffer_settings' in settings:
             self.frame_buffer.max_size = settings['buffer_settings']['frame_buffer_size']
             
-        print(f"🔧 Thread optimized for {settings['category']} processing")
         
     def get_optimized_ffmpeg_params(self, video_codec):
         """Get FFmpeg parameters optimized for the current resolution"""

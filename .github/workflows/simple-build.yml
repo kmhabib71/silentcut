@@ -1,0 +1,56 @@
+name: Simple Build Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test-build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller nuitka
+
+      - name: Test imports
+        run: |
+          python -c "import PyQt5.QtWidgets; print('✓ PyQt5 working')"
+          python -c "import moviepy.editor; print('✓ MoviePy working')"
+          python -c "import cv2; print('✓ OpenCV working')"
+          python -c "import numpy; print('✓ NumPy working')"
+          python -c "import sys; print(f'Python version: {sys.version}')"
+
+      - name: Quick PyInstaller Test
+        continue-on-error: true
+        run: |
+          pyinstaller --onefile --name="SilentCutTest" --windowed silence_cutter.py
+          if (Test-Path "dist/SilentCutTest.exe") {
+            echo "✓ PyInstaller build successful"
+            $size = (Get-Item "dist/SilentCutTest.exe").Length
+            echo "Executable size: $([math]::Round($size/1MB, 2)) MB"
+          } else {
+            echo "✗ PyInstaller build failed"
+          }
+
+      - name: Upload test executable
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-build
+          path: dist/SilentCutTest.exe
+          retention-days: 7

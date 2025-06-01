@@ -276,7 +276,6 @@ class RepeatedWordPreviewDialog(QDialog):
             
         # Emit segments for preview
         self.segments_selected.emit(segments)
-        print(f"🎬 Previewing removal of {len(segments)} repeated segments")
         
     def apply_removal(self):
         """Apply the removal and close dialog"""
@@ -287,7 +286,6 @@ class RepeatedWordPreviewDialog(QDialog):
             
         self.selected_segments = segments
         self.accept()
-        print(f"✂️ Applying removal of {len(segments)} repeated segments")
 
 def integrate_repeated_words_with_app(app_instance):
     """Integrate repeated word detection with the main application"""
@@ -312,7 +310,7 @@ def integrate_repeated_words_with_app(app_instance):
                     if hasattr(app_instance, 'apply_repeated_words_removal'):
                         app_instance.apply_repeated_words_removal(segments)
                     else:
-                        print("⚠️  Repeated words removal functionality not available")
+                        pass
                         
         except Exception as e:
             print(f"❌ Failed to handle repeated words detection: {e}")
@@ -320,7 +318,6 @@ def integrate_repeated_words_with_app(app_instance):
     # Store the handler function
     app_instance.on_repeated_words_detected = on_repeated_words_detected
     
-    print("✅ Repeated word integration set up")
 
 def add_repeated_words_to_silence_segments(silence_segments, repeated_word_segments):
     """Combine silence segments with repeated word segments for unified processing"""

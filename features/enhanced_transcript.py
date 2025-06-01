@@ -22,7 +22,6 @@ try:
     TRANSCRIPT_BASE_AVAILABLE = True
 except ImportError:
     TRANSCRIPT_BASE_AVAILABLE = False
-    print("⚠️  Base transcript widget not available")
 
 class RepeatedWordAnalyzer(QThread):
     """Analyze transcript for repeated words and phrases"""
@@ -436,7 +435,6 @@ def integrate_enhanced_transcript_with_app(app_instance):
                 lambda analysis: app_instance.on_repeated_words_detected(analysis)
             )
             
-            print("✅ Enhanced transcript widget integrated")
             return True
             
     except Exception as e:

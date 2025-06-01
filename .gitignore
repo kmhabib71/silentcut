@@ -142,4 +142,59 @@ yarn-error.log*
 *.key
 *.p12
 *.pfx
-entitlements.plist 
+entitlements.plist
+
+# Additional build tools and artifacts
+# PyInstaller specific
+*.spec
+build_temp/
+build_specs/
+build_output/
+
+# Nuitka specific
+*.build/
+*.dist/
+dist_nuitka/
+nuitka_build/
+
+# cx_Freeze specific
+build_cx/
+dist_cx/
+
+# PyArmor protection
+protected_source/
+protected_project/
+.pyarmor_config
+.pyarmor_capsule.zip
+pytransform/
+
+# Local distribution attempts
+distribution/
+secure_distribution/
+portable_distribution/
+
+# Build scripts and temporary files
+*_build.py
+*_builder.py
+*_launcher.py
+build_*.py
+setup_*.py
+create_*.py
+try_*.bat
+*.build.log
+
+# Version and build info
+build_info.json
+version_info.txt
+build_metadata.json
+
+# Archive files
+*.zip
+*.tar.gz
+*.7z
+*.rar
+
+# Checksums and signatures
+*.sha256
+*.md5
+*.sig 

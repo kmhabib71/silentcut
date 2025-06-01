@@ -209,7 +209,6 @@ class BatchProcessingThread(QThread):
         try:
             # Step 1: Detect silence
             self.file_progress.emit(file_path, 10)
-            print(f"🔍 Starting silence detection for: {os.path.basename(file_path)}")
             
             detection_thread = self.silence_detection_class(
                 file_path,
@@ -225,7 +224,6 @@ class BatchProcessingThread(QThread):
             def capture_detection_results(silent_parts):
                 nonlocal detected_silence
                 detected_silence = silent_parts
-                print(f"✅ Detected {len(silent_parts)} silence regions")
             
             detection_thread.detection_complete.connect(capture_detection_results)
             
@@ -239,7 +237,6 @@ class BatchProcessingThread(QThread):
             
             # Check if we have detected silence
             if not detected_silence:
-                print(f"⚠️  No silence detected in {os.path.basename(file_path)}, copying original file")
                 # If no silence detected, just copy the file
                 output_path = self.batch_manager.get_output_path(file_path)
                 import shutil
@@ -247,7 +244,6 @@ class BatchProcessingThread(QThread):
                 self.file_progress.emit(file_path, 100)
                 return True, output_path
             
-            print(f"🎯 Processing {len(detected_silence)} silence regions for removal")
             
             # Step 2: Process file with detected silence
             self.file_progress.emit(file_path, 50)
@@ -278,7 +274,6 @@ class BatchProcessingThread(QThread):
                 nonlocal processing_success, processing_output
                 processing_success = True
                 processing_output = output
-                print(f"✅ Processing completed: {output}")
             
             processing_thread.processing_complete.connect(capture_processing_results)
             
@@ -296,7 +291,6 @@ class BatchProcessingThread(QThread):
                 return False, "Processing failed - no output received"
             
         except Exception as e:
-            print(f"❌ Error processing {os.path.basename(file_path)}: {str(e)}")
             return False, str(e)
             
     def is_audio_file(self, file_path):
@@ -1054,7 +1048,6 @@ class BatchProcessingIntegration:
             # Replace setup_ui method
             main_app.setup_ui = enhanced_setup_ui
             
-        print("✅ Batch processing integrated with main application")
         
     @staticmethod
     def add_batch_button(main_app):
@@ -1070,8 +1063,9 @@ class BatchProcessingIntegration:
                     if any(isinstance(child.itemAt(i).widget(), QPushButton) 
                           for i in range(child.count()) 
                           if child.itemAt(i) and child.itemAt(i).widget()):
-                        button_layout = child
-                        break
+                        pass
+                    button_layout = child
+                    break
                         
             if button_layout:
                 # Create batch processing button
@@ -1098,12 +1092,11 @@ class BatchProcessingIntegration:
                 # Add button to layout
                 button_layout.addWidget(batch_btn)
                 
-                print("✅ Batch processing button added to main application")
             else:
-                print("⚠️  Could not find suitable location for batch processing button")
+                pass
                 
         except Exception as e:
-            print(f"❌ Error adding batch processing button: {e}")
+            pass
             
     @staticmethod
     def open_batch_dialog(main_app):

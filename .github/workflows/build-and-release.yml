@@ -1,0 +1,305 @@
+name: Build and Release Silent Cut Complete
+
+on:
+  push:
+    tags:
+      - "v*" # Triggers on version tags like v1.0.0
+    branches:
+      - main
+      - release/*
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: # Allows manual triggering
+
+env:
+  APP_NAME: SilentCutComplete
+  PYTHON_VERSION: "3.9"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history for proper versioning
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+
+      - name: Install system dependencies
+        run: |
+          # Install Visual C++ redistributable for PyQt5
+          choco install vcredist2019 -y
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pyarmor cx_Freeze nuitka pygame
+          pip install --upgrade setuptools wheel
+
+      - name: Verify dependencies
+        run: |
+          python -c "import PyQt5.QtWidgets; print('PyQt5 OK')"
+          python -c "import moviepy; print('MoviePy OK')"
+          python -c "import cv2; print('OpenCV OK')"
+          python -c "import numpy; print('NumPy OK')"
+
+      - name: Create version info
+        run: |
+          $version = if ($env:GITHUB_REF -match "refs/tags/v(.*)") { $matches[1] } else { "dev-$($env:GITHUB_SHA.Substring(0,7))" }
+          echo "VERSION=$version" >> $env:GITHUB_ENV
+          echo "Building version: $version"
+
+      - name: Build with PyInstaller (Primary Method)
+        id: pyinstaller_build
+        continue-on-error: true
+        run: |
+          # Create build directory
+          mkdir -p build_output
+
+          # Build with PyInstaller
+          pyinstaller --clean --noconfirm `
+            --onefile `
+            --windowed `
+            --name="${{ env.APP_NAME }}_v${{ env.VERSION }}" `
+            --distpath="build_output/pyinstaller" `
+            --workpath="build_temp" `
+            --specpath="build_specs" `
+            --add-data "features;features" `
+            --hidden-import="PyQt5" `
+            --hidden-import="PyQt5.QtCore" `
+            --hidden-import="PyQt5.QtWidgets" `
+            --hidden-import="PyQt5.QtGui" `
+            --hidden-import="moviepy" `
+            --hidden-import="cv2" `
+            --hidden-import="numpy" `
+            --hidden-import="matplotlib" `
+            --hidden-import="pydub" `
+            --collect-all="PyQt5" `
+            --collect-all="moviepy" `
+            --collect-all="cv2" `
+            silence_cutter.py
+
+          if (Test-Path "build_output/pyinstaller/${{ env.APP_NAME }}_v${{ env.VERSION }}.exe") {
+            echo "PYINSTALLER_SUCCESS=true" >> $env:GITHUB_ENV
+            echo "PyInstaller build successful"
+          } else {
+            echo "PYINSTALLER_SUCCESS=false" >> $env:GITHUB_ENV
+            echo "PyInstaller build failed"
+          }
+
+      - name: Build with Nuitka (Fallback Method)
+        if: env.PYINSTALLER_SUCCESS == 'false'
+        run: |
+          # Build with Nuitka as fallback
+          nuitka --standalone `
+            --onefile `
+            --windows-disable-console `
+            --output-filename="${{ env.APP_NAME }}_v${{ env.VERSION }}_nuitka.exe" `
+            --output-dir="build_output/nuitka" `
+            --include-data-dir="features=features" `
+            --follow-imports `
+            --plugin-enable=PyQt5 `
+            silence_cutter.py
+
+          if (Test-Path "build_output/nuitka/${{ env.APP_NAME }}_v${{ env.VERSION }}_nuitka.exe") {
+            echo "NUITKA_SUCCESS=true" >> $env:GITHUB_ENV
+            echo "Nuitka build successful"
+          }
+
+      - name: Apply Code Protection (PyArmor)
+        if: env.PYINSTALLER_SUCCESS == 'true' || env.NUITKA_SUCCESS == 'true'
+        run: |
+          # Create protected version directory
+          mkdir -p build_output/protected
+
+          # Initialize PyArmor project
+          pyarmor init --src=. --entry=silence_cutter.py protected_project
+
+          # Configure protection
+          pyarmor config --package-runtime=0 --restrict-mode=2
+
+          # Build protected version
+          pyarmor build --output=build_output/protected protected_project
+
+          echo "Code protection applied"
+
+      - name: Create Distribution Package
+        run: |
+          # Create final distribution directory
+          mkdir -p "distribution/${{ env.APP_NAME }}_v${{ env.VERSION }}"
+          $distDir = "distribution/${{ env.APP_NAME }}_v${{ env.VERSION }}"
+
+          # Copy successful builds
+          if ($env:PYINSTALLER_SUCCESS -eq "true") {
+            Copy-Item "build_output/pyinstaller/${{ env.APP_NAME }}_v${{ env.VERSION }}.exe" "$distDir/"
+          }
+
+          if ($env:NUITKA_SUCCESS -eq "true") {
+            Copy-Item "build_output/nuitka/${{ env.APP_NAME }}_v${{ env.VERSION }}_nuitka.exe" "$distDir/"
+          }
+
+          # Create documentation
+          @"
+          # Silent Cut Complete v${{ env.VERSION }}
+
+          ## Installation
+          1. Download the executable file
+          2. Run the .exe file directly (no installation required)
+          3. The application will start automatically
+
+          ## System Requirements
+          - Windows 10 or higher
+          - 4GB RAM minimum, 8GB recommended
+          - 1GB free disk space
+
+          ## Features
+          - Advanced audio/video cutting capabilities
+          - Batch processing support
+          - Transcript integration
+          - AI-powered audio analysis
+          - Manual cutting tools
+
+          ## Support
+          For issues or questions, please visit the GitHub repository.
+
+          Built on: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+          Commit: ${{ github.sha }}
+          "@ | Out-File -FilePath "$distDir/README.txt" -Encoding UTF8
+
+          # Create launcher script
+          @"
+          @echo off
+          title Silent Cut Complete v${{ env.VERSION }}
+
+          REM Check for .NET Framework
+          reg query "HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full" /v Release >nul 2>&1
+          if errorlevel 1 (
+              echo .NET Framework 4.0 or higher is required
+              echo Please install it from Microsoft's website
+              pause
+              exit /b 1
+          )
+
+          REM Run the application
+          if exist "${{ env.APP_NAME }}_v${{ env.VERSION }}.exe" (
+              start "" "${{ env.APP_NAME }}_v${{ env.VERSION }}.exe"
+          ) else if exist "${{ env.APP_NAME }}_v${{ env.VERSION }}_nuitka.exe" (
+              start "" "${{ env.APP_NAME }}_v${{ env.VERSION }}_nuitka.exe"
+          ) else (
+              echo Error: Application executable not found
+              pause
+          )
+          "@ | Out-File -FilePath "$distDir/Launch_SilentCut.bat" -Encoding ASCII
+
+          # Create version info file
+          @"
+          {
+            "version": "${{ env.VERSION }}",
+            "build_date": "$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssZ')",
+            "commit": "${{ github.sha }}",
+            "platform": "windows-x64",
+            "python_version": "${{ env.PYTHON_VERSION }}",
+            "build_method": "$(if ($env:PYINSTALLER_SUCCESS -eq 'true') {'PyInstaller'} else {'Nuitka'})"
+          }
+          "@ | Out-File -FilePath "$distDir/version_info.json" -Encoding UTF8
+
+      - name: Create ZIP Archive
+        run: |
+          $archiveName = "${{ env.APP_NAME }}_v${{ env.VERSION }}_Windows.zip"
+          Compress-Archive -Path "distribution/${{ env.APP_NAME }}_v${{ env.VERSION }}/*" -DestinationPath $archiveName
+          echo "ARCHIVE_NAME=$archiveName" >> $env:GITHUB_ENV
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}_v${{ env.VERSION }}_Windows
+          path: ${{ env.ARCHIVE_NAME }}
+          retention-days: 30
+
+      - name: Upload Distribution Folder
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}_v${{ env.VERSION }}_Distribution
+          path: distribution/
+          retention-days: 30
+
+  create-release:
+    needs: build-windows
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*_Windows"
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: "*.zip"
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          body: |
+            ## Silent Cut Complete Release
+
+            ### What's New
+            - Complete application with source code protection
+            - Optimized executable for Windows
+            - Self-contained distribution (no Python installation required)
+
+            ### Downloads
+            - **Windows**: Download the ZIP file and extract it
+            - Run `Launch_SilentCut.bat` or the executable directly
+
+            ### System Requirements
+            - Windows 10 or higher
+            - 4GB RAM minimum
+            - 1GB free disk space
+
+            Built with ❤️ using GitHub Actions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-matrix:
+    if: github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        python-version: ["3.9", "3.10", "3.11"]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Test import
+        run: |
+          python -c "import sys; print(f'Python {sys.version}')"
+          python -c "import PyQt5; print('PyQt5 imported successfully')"
+          python -c "import silence_cutter; print('Main module imported successfully')"

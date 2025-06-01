@@ -28,7 +28,6 @@ import queue
 try:
     from features import ManualCuttingManager, ManualCuttingIntegration
     MANUAL_CUTTING_AVAILABLE = True
-    print("✅ Manual cutting feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Manual cutting feature not available: {e}")
     MANUAL_CUTTING_AVAILABLE = False
@@ -37,7 +36,6 @@ except ImportError as e:
 try:
     from features.batch_processing import BatchProcessingIntegration
     BATCH_PROCESSING_AVAILABLE = True
-    print("✅ Batch processing feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Batch processing feature not available: {e}")
     BATCH_PROCESSING_AVAILABLE = False
@@ -46,7 +44,6 @@ except ImportError as e:
 try:
     from features.resolution_optimizer import ResolutionOptimizer, ResolutionAwareProcessingMixin
     RESOLUTION_OPTIMIZER_AVAILABLE = True
-    print("✅ Resolution optimizer loaded successfully")
 except ImportError as e:
     print(f"⚠️  Resolution optimizer not available: {e}")
     RESOLUTION_OPTIMIZER_AVAILABLE = False
@@ -57,7 +54,6 @@ try:
         detect_repeated_words, apply_repeated_word_removal
     )
     TRANSCRIPT_INTEGRATION_AVAILABLE = True
-    print("✅ Transcript integration loaded successfully")
 except ImportError as e:
     print(f"⚠️  Transcript integration not available: {e}")
     TRANSCRIPT_INTEGRATION_AVAILABLE = False
@@ -96,6 +92,7 @@ class CircularBuffer:
     def get(self, position):
         """Get item at specific position, returns None if not found"""
         with self.lock:
+            pass
             try:
                 index = list(self.positions).index(position)
                 self.hits += 1
@@ -107,7 +104,9 @@ class CircularBuffer:
     def get_nearest(self, position, tolerance=5):
         """Get nearest item within tolerance range"""
         with self.lock:
+            pass
             if not self.positions:
+                pass
                 return None
                 
             # Find closest position within tolerance
@@ -121,6 +120,7 @@ class CircularBuffer:
                     closest_diff = diff
                     
             if closest_pos is not None:
+                pass
                 try:
                     index = list(self.positions).index(closest_pos)
                     self.hits += 1
@@ -181,6 +181,7 @@ class AudioCircularBuffer:
     def put_samples(self, samples, start_time):
         """Add audio samples with timestamp"""
         with self.lock:
+            pass
             for i, sample in enumerate(samples):
                 timestamp = start_time + (i / self.sample_rate)
                 self.buffer.append(sample)
@@ -189,14 +190,18 @@ class AudioCircularBuffer:
     def get_samples(self, start_time, duration):
         """Get audio samples for specific time range"""
         with self.lock:
+            pass
             if not self.timestamps:
+                pass
                 return []
                 
             end_time = start_time + duration
             samples = []
             
             for i, timestamp in enumerate(self.timestamps):
+                pass
                 if start_time <= timestamp <= end_time:
+                    pass
                     if i < len(self.buffer):
                         samples.append(self.buffer[i])
                         
@@ -294,10 +299,8 @@ class VideoPlaybackThread(QThread):
                 video_clip = mp.VideoFileClip(self.video_path)
                 self.actual_duration = video_clip.duration
                 video_clip.close()
-                print(f"Video thread using exact duration: {self.actual_duration:.6f}s")
             except:
                 self.actual_duration = self.frame_count / self.fps if self.fps > 0 else 0
-                print(f"Fallback duration calculation: {self.actual_duration:.6f}s")
             
             # Calculate frame duration based on actual duration instead of FPS
             if self.frame_count > 0 and self.actual_duration > 0:
@@ -305,8 +308,6 @@ class VideoPlaybackThread(QThread):
             else:
                 self.frame_duration = 1.0 / self.fps
                 
-            print(f"Video initialized: detected {detected_fps} FPS, using {self.fps} FPS, {self.frame_count} frames, exact duration: {self.actual_duration:.6f}s, frame duration: {self.frame_duration:.6f}s")
-            print(f"✓ Video preview will use framerate: {self.fps} FPS (minimum 30 FPS enforced)")
             
             # Initialize audio
             self.initialize_audio()
@@ -343,7 +344,6 @@ class VideoPlaybackThread(QThread):
                 # Verify audio duration for synchronization
                 extracted_audio_duration = video_clip.audio.duration
                 video_duration = video_clip.duration
-                print(f"Audio sync verification: video={video_duration:.6f}s, audio={extracted_audio_duration:.6f}s")
                 
                 # Store the verified duration
                 self.verified_audio_duration = extracted_audio_duration
@@ -352,7 +352,7 @@ class VideoPlaybackThread(QThread):
                 if self.duration_difference > 0.1:
                     print(f"WARNING: Audio-video duration mismatch: {self.duration_difference:.3f}s difference")
                 else:
-                    print(f"✓ Audio-video duration sync verified (difference: {self.duration_difference:.3f}s)")
+                    pass
                 
                 video_clip.close()
                 
@@ -360,9 +360,8 @@ class VideoPlaybackThread(QThread):
                 pygame.mixer.music.load(self.temp_audio_file.name)
                 self.audio_loaded = True
                 self.preview_audio_segments = []  # Will store segmented audio for preview
-                print("Audio loaded successfully for preview (optimized)")
             else:
-                print("No audio track found in video")
+                pass
                 
         except Exception as e:
             print(f"Audio initialization failed: {e}")
@@ -388,16 +387,12 @@ class VideoPlaybackThread(QThread):
             current_time = time.time()
             self.playback_start_time = current_time - preview_position
             
-            print(f"🎵 PREVIEW PLAYBACK START:")
-            print(f"  Original position: {original_position:.6f}s")
-            print(f"  Preview position: {preview_position:.6f}s")
-            print(f"  Preview duration: {self.preview_duration:.6f}s")
             
             if self.audio_loaded:
+                pass
                 try:
                     # Play preview audio from the correct preview position
                     pygame.mixer.music.play(start=preview_position)
-                    print(f"✓ Preview audio started at {preview_position:.6f}s")
                 except Exception as e:
                     print(f"Error starting preview audio: {e}")
         else:
@@ -430,15 +425,12 @@ class VideoPlaybackThread(QThread):
             self.playback_start_time = current_time - current_position
             
             if self.audio_loaded:
+                pass
                 try:
                     # Enhanced audio start with synchronization verification
                     pygame.mixer.music.play(start=audio_position)
                     
                     # Log detailed playback synchronization info
-                    print(f"🎵 NORMAL PLAYBACK START:")
-                    print(f"  Video position: {current_position:.6f}s")
-                    print(f"  Audio position: {audio_position:.6f}s") 
-                    print(f"  Current frame: {self.current_frame}")
                     
                 except Exception as e:
                     print(f"Error starting audio: {e}")
@@ -455,6 +447,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.pause()
             except:
@@ -487,10 +480,10 @@ class VideoPlaybackThread(QThread):
         
         # Restart audio from new position if playing
         if self.audio_loaded and self.is_playing:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.music.play(start=precise_audio_position)
-                print(f"Seeked to frame {frame_number}, precise audio position: {precise_audio_position:.3f}s (ratio: {frame_ratio:.4f})")
                 
                 # Immediately update playback timing to compensate for pygame seeking inaccuracy
                 # We calculate the offset from expected position
@@ -502,7 +495,6 @@ class VideoPlaybackThread(QThread):
         else:
             # If not playing, still reset timing for when playback starts
             self.playback_start_time = current_time
-            print(f"Seeked to frame {frame_number} (paused), position: {precise_audio_position:.3f}s")
             
         self.mutex.unlock()
         
@@ -541,23 +533,17 @@ class VideoPlaybackThread(QThread):
             
             # Seek preview audio
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=target_time_seconds)  # Use preview timeline
                     
-                    print(f"🎵 PREVIEW SEEK:")
-                    print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                    print(f"  Original video time: {original_time:.6f}s")
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking preview audio: {e}")
             else:
-                print(f"🎵 PREVIEW SEEK (paused):")
-                print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                print(f"  Original video time: {original_time:.6f}s")
-                print(f"  Video frame: {target_frame}")
+                pass
         else:
             # Normal mode: use original timeline
             # Validate target time
@@ -585,6 +571,7 @@ class VideoPlaybackThread(QThread):
             
             # Verify audio position against timeline duration for perfect sync
             if hasattr(self, 'verified_audio_duration') and self.verified_audio_duration > 0:
+                pass
                 if exact_timeline_position > self.verified_audio_duration:
                     exact_timeline_position = self.verified_audio_duration
             
@@ -595,23 +582,17 @@ class VideoPlaybackThread(QThread):
             
             # Enhanced audio seeking with EXACT timeline position
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=exact_timeline_position)
                     
-                    print(f"🎵 NORMAL SEEK:")
-                    print(f"  Timeline position: {target_time_seconds:.6f}s")
-                    print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking audio: {e}")
             else:
-                print(f"🎵 NORMAL SEEK (paused):")
-                print(f"  Timeline position: {target_time_seconds:.6f}s")
-                print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                print(f"  Video frame: {target_frame}")
+                pass
         
         self.mutex.unlock()
         
@@ -622,6 +603,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
             except:
@@ -631,6 +613,7 @@ class VideoPlaybackThread(QThread):
     def run(self):
         """Main thread loop with optimized performance for preview mode"""
         if not self.initialize_video():
+            pass
             return
             
         # Use original video framerate for accurate playback
@@ -685,6 +668,7 @@ class VideoPlaybackThread(QThread):
                     self.mutex.unlock()
                     
                     if self.audio_loaded:
+                        pass
                         try:
                             pygame.mixer.music.stop()
                         except:
@@ -700,11 +684,11 @@ class VideoPlaybackThread(QThread):
                         self.mutex.unlock()
                         
                         if self.audio_loaded:
+                            pass
                             try:
                                 pygame.mixer.music.stop()
                             except:
                                 pass
-                        print("✓ Preview playback completed - reached end of segments")
                 
                 # Always process frames to maintain original framerate
                 should_process_frame = True
@@ -728,7 +712,6 @@ class VideoPlaybackThread(QThread):
                             if not hasattr(self, '_last_seek_debug') or time.time() - self._last_seek_debug > 1.0:
                                 self._last_seek_debug = time.time()
                                 elapsed_time = time.time() - current_playback_start
-                                print(f"🎬 VIDEO SEEK: preview_time={elapsed_time:.2f}s → seeking to frame {self.current_frame}")
                         elif seek_frame >= 0:
                             # Normal seeking behavior
                             self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
@@ -785,6 +768,7 @@ class VideoPlaybackThread(QThread):
         if hasattr(self, 'cap'):
             self.cap.release()
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.quit()
@@ -827,7 +811,6 @@ import queue
 try:
     from features import ManualCuttingManager, ManualCuttingIntegration
     MANUAL_CUTTING_AVAILABLE = True
-    print("✅ Manual cutting feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Manual cutting feature not available: {e}")
     MANUAL_CUTTING_AVAILABLE = False
@@ -836,7 +819,6 @@ except ImportError as e:
 try:
     from features.batch_processing import BatchProcessingIntegration
     BATCH_PROCESSING_AVAILABLE = True
-    print("✅ Batch processing feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Batch processing feature not available: {e}")
     BATCH_PROCESSING_AVAILABLE = False
@@ -845,7 +827,6 @@ except ImportError as e:
 try:
     from features.resolution_optimizer import ResolutionOptimizer, ResolutionAwareProcessingMixin
     RESOLUTION_OPTIMIZER_AVAILABLE = True
-    print("✅ Resolution optimizer loaded successfully")
 except ImportError as e:
     print(f"⚠️  Resolution optimizer not available: {e}")
     RESOLUTION_OPTIMIZER_AVAILABLE = False
@@ -856,7 +837,6 @@ try:
         detect_repeated_words, apply_repeated_word_removal
     )
     TRANSCRIPT_INTEGRATION_AVAILABLE = True
-    print("✅ Transcript integration loaded successfully")
 except ImportError as e:
     print(f"⚠️  Transcript integration not available: {e}")
     TRANSCRIPT_INTEGRATION_AVAILABLE = False
@@ -895,6 +875,7 @@ class CircularBuffer:
     def get(self, position):
         """Get item at specific position, returns None if not found"""
         with self.lock:
+            pass
             try:
                 index = list(self.positions).index(position)
                 self.hits += 1
@@ -906,7 +887,9 @@ class CircularBuffer:
     def get_nearest(self, position, tolerance=5):
         """Get nearest item within tolerance range"""
         with self.lock:
+            pass
             if not self.positions:
+                pass
                 return None
                 
             # Find closest position within tolerance
@@ -920,6 +903,7 @@ class CircularBuffer:
                     closest_diff = diff
                     
             if closest_pos is not None:
+                pass
                 try:
                     index = list(self.positions).index(closest_pos)
                     self.hits += 1
@@ -980,6 +964,7 @@ class AudioCircularBuffer:
     def put_samples(self, samples, start_time):
         """Add audio samples with timestamp"""
         with self.lock:
+            pass
             for i, sample in enumerate(samples):
                 timestamp = start_time + (i / self.sample_rate)
                 self.buffer.append(sample)
@@ -988,14 +973,18 @@ class AudioCircularBuffer:
     def get_samples(self, start_time, duration):
         """Get audio samples for specific time range"""
         with self.lock:
+            pass
             if not self.timestamps:
+                pass
                 return []
                 
             end_time = start_time + duration
             samples = []
             
             for i, timestamp in enumerate(self.timestamps):
+                pass
                 if start_time <= timestamp <= end_time:
+                    pass
                     if i < len(self.buffer):
                         samples.append(self.buffer[i])
                         
@@ -1093,10 +1082,8 @@ class VideoPlaybackThread(QThread):
                 video_clip = mp.VideoFileClip(self.video_path)
                 self.actual_duration = video_clip.duration
                 video_clip.close()
-                print(f"Video thread using exact duration: {self.actual_duration:.6f}s")
             except:
                 self.actual_duration = self.frame_count / self.fps if self.fps > 0 else 0
-                print(f"Fallback duration calculation: {self.actual_duration:.6f}s")
             
             # Calculate frame duration based on actual duration instead of FPS
             if self.frame_count > 0 and self.actual_duration > 0:
@@ -1104,8 +1091,6 @@ class VideoPlaybackThread(QThread):
             else:
                 self.frame_duration = 1.0 / self.fps
                 
-            print(f"Video initialized: detected {detected_fps} FPS, using {self.fps} FPS, {self.frame_count} frames, exact duration: {self.actual_duration:.6f}s, frame duration: {self.frame_duration:.6f}s")
-            print(f"✓ Video preview will use framerate: {self.fps} FPS (minimum 30 FPS enforced)")
             
             # Initialize audio
             self.initialize_audio()
@@ -1142,7 +1127,6 @@ class VideoPlaybackThread(QThread):
                 # Verify audio duration for synchronization
                 extracted_audio_duration = video_clip.audio.duration
                 video_duration = video_clip.duration
-                print(f"Audio sync verification: video={video_duration:.6f}s, audio={extracted_audio_duration:.6f}s")
                 
                 # Store the verified duration
                 self.verified_audio_duration = extracted_audio_duration
@@ -1151,7 +1135,7 @@ class VideoPlaybackThread(QThread):
                 if self.duration_difference > 0.1:
                     print(f"WARNING: Audio-video duration mismatch: {self.duration_difference:.3f}s difference")
                 else:
-                    print(f"✓ Audio-video duration sync verified (difference: {self.duration_difference:.3f}s)")
+                    pass
                 
                 video_clip.close()
                 
@@ -1159,9 +1143,8 @@ class VideoPlaybackThread(QThread):
                 pygame.mixer.music.load(self.temp_audio_file.name)
                 self.audio_loaded = True
                 self.preview_audio_segments = []  # Will store segmented audio for preview
-                print("Audio loaded successfully for preview (optimized)")
             else:
-                print("No audio track found in video")
+                pass
                 
         except Exception as e:
             print(f"Audio initialization failed: {e}")
@@ -1187,16 +1170,12 @@ class VideoPlaybackThread(QThread):
             current_time = time.time()
             self.playback_start_time = current_time - preview_position
             
-            print(f"🎵 PREVIEW PLAYBACK START:")
-            print(f"  Original position: {original_position:.6f}s")
-            print(f"  Preview position: {preview_position:.6f}s")
-            print(f"  Preview duration: {self.preview_duration:.6f}s")
             
             if self.audio_loaded:
+                pass
                 try:
                     # Play preview audio from the correct preview position
                     pygame.mixer.music.play(start=preview_position)
-                    print(f"✓ Preview audio started at {preview_position:.6f}s")
                 except Exception as e:
                     print(f"Error starting preview audio: {e}")
         else:
@@ -1229,15 +1208,12 @@ class VideoPlaybackThread(QThread):
             self.playback_start_time = current_time - current_position
             
             if self.audio_loaded:
+                pass
                 try:
                     # Enhanced audio start with synchronization verification
                     pygame.mixer.music.play(start=audio_position)
                     
                     # Log detailed playback synchronization info
-                    print(f"🎵 NORMAL PLAYBACK START:")
-                    print(f"  Video position: {current_position:.6f}s")
-                    print(f"  Audio position: {audio_position:.6f}s") 
-                    print(f"  Current frame: {self.current_frame}")
                     
                 except Exception as e:
                     print(f"Error starting audio: {e}")
@@ -1254,6 +1230,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.pause()
             except:
@@ -1286,10 +1263,10 @@ class VideoPlaybackThread(QThread):
         
         # Restart audio from new position if playing
         if self.audio_loaded and self.is_playing:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.music.play(start=precise_audio_position)
-                print(f"Seeked to frame {frame_number}, precise audio position: {precise_audio_position:.3f}s (ratio: {frame_ratio:.4f})")
                 
                 # Immediately update playback timing to compensate for pygame seeking inaccuracy
                 # We calculate the offset from expected position
@@ -1301,7 +1278,6 @@ class VideoPlaybackThread(QThread):
         else:
             # If not playing, still reset timing for when playback starts
             self.playback_start_time = current_time
-            print(f"Seeked to frame {frame_number} (paused), position: {precise_audio_position:.3f}s")
             
         self.mutex.unlock()
         
@@ -1340,23 +1316,17 @@ class VideoPlaybackThread(QThread):
             
             # Seek preview audio
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=target_time_seconds)  # Use preview timeline
                     
-                    print(f"🎵 PREVIEW SEEK:")
-                    print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                    print(f"  Original video time: {original_time:.6f}s")
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking preview audio: {e}")
             else:
-                print(f"🎵 PREVIEW SEEK (paused):")
-                print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                print(f"  Original video time: {original_time:.6f}s")
-                print(f"  Video frame: {target_frame}")
+                pass
         else:
             # Normal mode: use original timeline
             # Validate target time
@@ -1384,6 +1354,7 @@ class VideoPlaybackThread(QThread):
             
             # Verify audio position against timeline duration for perfect sync
             if hasattr(self, 'verified_audio_duration') and self.verified_audio_duration > 0:
+                pass
                 if exact_timeline_position > self.verified_audio_duration:
                     exact_timeline_position = self.verified_audio_duration
             
@@ -1394,23 +1365,17 @@ class VideoPlaybackThread(QThread):
             
             # Enhanced audio seeking with EXACT timeline position
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=exact_timeline_position)
                     
-                    print(f"🎵 NORMAL SEEK:")
-                    print(f"  Timeline position: {target_time_seconds:.6f}s")
-                    print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking audio: {e}")
             else:
-                print(f"🎵 NORMAL SEEK (paused):")
-                print(f"  Timeline position: {target_time_seconds:.6f}s")
-                print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                print(f"  Video frame: {target_frame}")
+                pass
         
         self.mutex.unlock()
         
@@ -1421,6 +1386,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
             except:
@@ -1430,6 +1396,7 @@ class VideoPlaybackThread(QThread):
     def run(self):
         """Main thread loop with optimized performance for preview mode"""
         if not self.initialize_video():
+            pass
             return
             
         # Use original video framerate for accurate playback
@@ -1484,6 +1451,7 @@ class VideoPlaybackThread(QThread):
                     self.mutex.unlock()
                     
                     if self.audio_loaded:
+                        pass
                         try:
                             pygame.mixer.music.stop()
                         except:
@@ -1499,11 +1467,11 @@ class VideoPlaybackThread(QThread):
                         self.mutex.unlock()
                         
                         if self.audio_loaded:
+                            pass
                             try:
                                 pygame.mixer.music.stop()
                             except:
                                 pass
-                        print("✓ Preview playback completed - reached end of segments")
                 
                 # Always process frames to maintain original framerate
                 should_process_frame = True
@@ -1527,7 +1495,6 @@ class VideoPlaybackThread(QThread):
                             if not hasattr(self, '_last_seek_debug') or time.time() - self._last_seek_debug > 1.0:
                                 self._last_seek_debug = time.time()
                                 elapsed_time = time.time() - current_playback_start
-                                print(f"🎬 VIDEO SEEK: preview_time={elapsed_time:.2f}s → seeking to frame {self.current_frame}")
                         elif seek_frame >= 0:
                             # Normal seeking behavior
                             self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
@@ -1584,6 +1551,7 @@ class VideoPlaybackThread(QThread):
         if hasattr(self, 'cap'):
             self.cap.release()
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.quit()
@@ -1599,6 +1567,7 @@ class VideoPlaybackThread(QThread):
     def handle_preview_playback_optimized(self, elapsed_time, initial_frame):
         """Optimized preview playback with cached calculations"""
         if not self.preview_segments:
+            pass
             return initial_frame
             
         # Cache segment lookup for performance
@@ -1626,7 +1595,6 @@ class VideoPlaybackThread(QThread):
                     # Debug output to show frame skipping (only occasionally to avoid spam)
                     if not hasattr(self, '_last_debug_time') or elapsed_time - self._last_debug_time > 2.0:
                         self._last_debug_time = elapsed_time
-                        print(f"🎬 PREVIEW FRAME SKIP: preview_time={elapsed_time:.2f}s → original_time={target_original_time:.2f}s → frame={self._cached_target_frame}")
                     
                     break
                     
@@ -1680,6 +1648,7 @@ class VideoPlaybackThread(QThread):
             pixmap = QPixmap.fromImage(qt_image)
             return pixmap
         except:
+            pass
             return None
             
     def process_frame_ultra_fast(self, frame):
@@ -1723,23 +1692,28 @@ class VideoPlaybackThread(QThread):
             pixmap = QPixmap.fromImage(qt_image)
             return pixmap
         except:
+            pass
             return None
             
     def prefetch_frames(self, current_frame):
         """Prefetch nearby frames for smoother playback - lightweight version"""
         if not self.buffer_enabled or not self.prefetch_enabled:
+            pass
             return
             
         # Only prefetch 2-3 frames ahead to minimize performance impact
         def prefetch_worker():
             try:
+                pass
                 for offset in range(1, min(self.prefetch_range, 3)):  # Only 2-3 frames ahead
                     target_frame = current_frame + offset
                     if target_frame >= self.frame_count:
+                        pass
                         break
                         
                     # Check if frame is already in buffer
                     if self.frame_buffer.get(target_frame) is not None:
+                        pass
                         continue
                         
                     # Use existing video capture instead of creating new one
@@ -1768,7 +1742,6 @@ class VideoPlaybackThread(QThread):
     def enable_prefetch(self):
         """Enable prefetch after initial loading is complete"""
         self.prefetch_enabled = True
-        print("🚀 Frame prefetching enabled for smoother playback")
         
     def disable_prefetch(self):
         """Disable prefetch during heavy operations"""
@@ -1796,11 +1769,10 @@ class VideoPlaybackThread(QThread):
                 # Load the preview audio into pygame
                 try:
                     pygame.mixer.music.load(self.temp_preview_audio_file.name)
-                    print("✓ Preview audio loaded successfully - silent parts will be skipped during playback")
                 except Exception as e:
                     print(f"Error loading preview audio: {e}")
             else:
-                print("Failed to create preview audio - using original audio")
+                pass
         else:
             self.silent_parts = []
             self.preview_segments = []
@@ -1808,9 +1780,9 @@ class VideoPlaybackThread(QThread):
             
             # Restore original audio
             if self.audio_loaded and hasattr(self, 'temp_audio_file'):
+                pass
                 try:
                     pygame.mixer.music.load(self.temp_audio_file.name)
-                    print("✓ Original audio restored")
                 except Exception as e:
                     print(f"Error restoring original audio: {e}")
         self.mutex.unlock()
@@ -1818,6 +1790,7 @@ class VideoPlaybackThread(QThread):
     def get_effective_duration(self):
         """Get the effective timeline duration (preview duration in preview mode, original otherwise)"""
         if self.preview_mode and hasattr(self, 'preview_timeline_duration') and self.preview_timeline_duration is not None:
+            pass
             return self.preview_timeline_duration
         return self.duration_seconds
         
@@ -1829,11 +1802,13 @@ class VideoPlaybackThread(QThread):
             
         # Preview mode: convert preview timeline position to original timeline position
         if not self.silent_parts:
+            pass
             return click_time_seconds
             
         # Get selected silent parts (ones that will be cut)
         selected_silent_parts = [part for part in self.silent_parts if part['selected']]
         if not selected_silent_parts:
+            pass
             return click_time_seconds
             
         # Sort by start time
@@ -1844,6 +1819,7 @@ class VideoPlaybackThread(QThread):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 preview_segments.append((last_end, silent_part['start']))
@@ -1855,6 +1831,7 @@ class VideoPlaybackThread(QThread):
             
         # Convert preview timeline position to original time
         if click_time_seconds <= 0:
+            pass
             return preview_segments[0][0] if preview_segments else 0
             
         accumulated_time = 0
@@ -1864,10 +1841,6 @@ class VideoPlaybackThread(QThread):
                 # The position is within this segment
                 offset_in_segment = click_time_seconds - accumulated_time
                 original_time = start + offset_in_segment
-                print(f"🎯 TIMELINE CLICK CONVERSION:")
-                print(f"  Preview click: {click_time_seconds:.3f}s")
-                print(f"  Original time: {original_time:.3f}s")
-                print(f"  Segment: {start:.3f}s - {end:.3f}s")
                 return original_time
             accumulated_time += segment_duration
             
@@ -1896,6 +1869,7 @@ class VideoPlaybackThread(QThread):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 self.preview_segments.append((last_end, silent_part['start']))
@@ -1908,16 +1882,17 @@ class VideoPlaybackThread(QThread):
         # Calculate total preview duration correctly
         self.preview_duration = sum(end - start for start, end in self.preview_segments)
         
-        print(f"Preview segments calculated: {len(self.preview_segments)} segments, duration: {self.preview_duration:.3f}s")
         for i, (start, end) in enumerate(self.preview_segments):
             print(f"  Segment {i+1}: {start:.3f}s - {end:.3f}s (duration: {end-start:.3f}s)")
         
     def preview_time_to_original_time(self, preview_time):
         """Convert preview timeline position to original video time"""
         if not self.preview_mode or not self.preview_segments:
+            pass
             return preview_time
             
         if preview_time <= 0:
+            pass
             return self.preview_segments[0][0] if self.preview_segments else 0
             
         accumulated_time = 0
@@ -1935,10 +1910,12 @@ class VideoPlaybackThread(QThread):
     def original_time_to_preview_time(self, original_time):
         """Convert original video time to preview timeline position"""
         if not self.preview_mode or not self.preview_segments:
+            pass
             return original_time
             
         accumulated_preview_time = 0
         for start, end in self.preview_segments:
+            pass
             if start <= original_time <= end:
                 # The time is within this segment
                 offset_in_segment = original_time - start
@@ -1956,6 +1933,7 @@ class VideoPlaybackThread(QThread):
     def create_preview_audio(self):
         """Create segmented audio file for preview mode that skips silent parts"""
         if not self.preview_segments or not self.audio_loaded:
+            pass
             return False
             
         try:
@@ -1963,7 +1941,6 @@ class VideoPlaybackThread(QThread):
             import moviepy.editor as mp
             from pydub import AudioSegment
             
-            print("Creating preview audio with silent parts removed...")
             
             # Load the original audio
             original_audio = AudioSegment.from_file(self.temp_audio_file.name)
@@ -1977,7 +1954,6 @@ class VideoPlaybackThread(QThread):
                 # Extract segment
                 segment = original_audio[start_ms:end_ms]
                 preview_audio_segments.append(segment)
-                print(f"  Added segment: {start_time:.2f}s - {end_time:.2f}s (duration: {(end_time-start_time):.2f}s)")
             
             # Concatenate all segments
             if preview_audio_segments:
@@ -1989,12 +1965,10 @@ class VideoPlaybackThread(QThread):
                 
                 preview_audio.export(self.temp_preview_audio_file.name, format="wav")
                 
-                print(f"Preview audio created: {len(preview_audio_segments)} segments, total duration: {len(preview_audio)/1000:.2f}s")
-                print(f"Preview audio saved to: {self.temp_preview_audio_file.name}")
                 
                 return True
             else:
-                print("No preview segments to create audio from")
+                pass
                 return False
                 
         except Exception as e:
@@ -2014,7 +1988,7 @@ class WaveformLoadingThread(QThread):
     def run(self):
         """Load waveform data in background"""
         try:
-            print("🌊 Loading waveform in background...")
+            pass
             
             # Check if this is an audio-only file
             audio_extensions = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'}
@@ -2022,7 +1996,6 @@ class WaveformLoadingThread(QThread):
             is_audio_only = file_ext in audio_extensions
             
             if is_audio_only:
-                print(f"🎵 Loading audio-only file: {self.video_path}")
                 self.progress_updated.emit("Loading audio file...")
                 
                 # Load audio directly using pydub
@@ -2032,7 +2005,6 @@ class WaveformLoadingThread(QThread):
                 # Emit duration immediately for instant timeline setup
                 duration_seconds = len(audio) / 1000.0
                 self.duration_loaded.emit(duration_seconds)
-                print(f"🎵 Audio duration: {duration_seconds:.2f} seconds")
                 
                 self.progress_updated.emit("Processing audio data...")
                 
@@ -2069,7 +2041,6 @@ class WaveformLoadingThread(QThread):
                 max_amplitude = max(abs(s) for s in samples) if samples else 1.0
                 
                 self.progress_updated.emit("Audio waveform ready!")
-                print(f"🎵 Audio waveform generated: {len(samples)} samples, max amplitude: {max_amplitude:.3f}")
                 
                 # Emit the loaded waveform data
                 self.waveform_loaded.emit(samples, max_amplitude)
@@ -2077,7 +2048,6 @@ class WaveformLoadingThread(QThread):
                 
             else:
                 # Handle video files
-                print(f"🎬 Loading video file: {self.video_path}")
                 self.progress_updated.emit("Loading video file...")
                 
                 # Extract audio using MoviePy
@@ -2091,7 +2061,6 @@ class WaveformLoadingThread(QThread):
                 self.progress_updated.emit("Extracting audio track...")
                 
                 if video.audio is None:
-                    print("No audio track found in video")
                     self.waveform_loaded.emit(None, 0)
                     video.close()
                     return
@@ -2190,6 +2159,7 @@ class SilenceDetectionThread(QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -2202,7 +2172,9 @@ class SilenceDetectionThread(QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -2212,9 +2184,6 @@ class SilenceDetectionThread(QThread):
         try:
             # Use the accurate pydub-based detection for better results
             # Skip fast FFmpeg detection to maintain accuracy
-            print(f"\n---------- ACCURATE SILENCE DETECTION START ----------")
-            print(f"Using pydub for accurate silence detection")
-            print(f"Detecting silence with threshold: {self.silence_threshold} dB, min duration: {self.min_silence_duration} ms, padding: {self.padding_ms} ms")
             
             # Start with initial progress
             self.progress_updated.emit(5)
@@ -2226,15 +2195,12 @@ class SilenceDetectionThread(QThread):
             is_audio_only = file_ext in audio_extensions
             
             if is_audio_only:
-                print(f"Detected audio-only file: {self.video_path}")
                 self.progress_updated.emit(10)
                 QApplication.processEvents()
                 
                 # For audio files, load directly with pydub
-                print(f"Loading audio directly from: {self.video_path}")
                 audio = AudioSegment.from_file(self.video_path)
                 audio_duration_ms = len(audio)
-                print(f"Audio loaded directly: duration={audio_duration_ms}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
                 self.progress_updated.emit(40)
                 QApplication.processEvents()
                 
@@ -2252,14 +2218,12 @@ class SilenceDetectionThread(QThread):
                 change_settings({"FFMPEG_BINARY": self.ffmpeg_path})
                 
                 # Extract audio from video more efficiently
-                print(f"Loading video from: {self.video_path}")
                 self.progress_updated.emit(10)
                 QApplication.processEvents()
                 
                 # Load video more efficiently
                 video = mp.VideoFileClip(self.video_path)
                 audio_duration_ms = int(video.audio.duration * 1000)
-                print(f"Video loaded, audio duration: {audio_duration_ms} ms")
                 self.progress_updated.emit(20)
                 QApplication.processEvents()
                 
@@ -2267,7 +2231,6 @@ class SilenceDetectionThread(QThread):
                 temp_audio = tempfile.NamedTemporaryFile(suffix=f'_sid_{os.getpid()}_{int(time.time())}.wav', delete=False)
                 temp_audio_path = temp_audio.name
                 temp_audio.close()
-                print(f"Extracting audio to: {temp_audio_path}")
                 
                 self.progress_updated.emit(30)
                 QApplication.processEvents()
@@ -2280,14 +2243,11 @@ class SilenceDetectionThread(QThread):
                     codec='pcm_s16le',  # Fast codec
                     ffmpeg_params=['-ar', '22050']  # Lower sample rate for faster processing
                 )
-                print(f"Audio extracted successfully")
                 self.progress_updated.emit(50)
                 QApplication.processEvents()
                 
                 # Load audio and detect non-silent parts with optimized settings
-                print(f"Loading audio for accurate silence detection")
                 audio = AudioSegment.from_file(temp_audio_path)
-                print(f"Audio loaded: duration={len(audio)}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
                 self.progress_updated.emit(60)
                 QApplication.processEvents()
                 
@@ -2296,7 +2256,6 @@ class SilenceDetectionThread(QThread):
                     audio = audio.set_channels(1)
             
             # Detect non-silent parts with optimized parameters
-            print(f"Detecting non-silent parts with silence threshold={self.silence_threshold}dB, min_silence_len={self.min_silence_duration}ms")
             non_silent_ranges = detect_nonsilent(
                 audio,
                 min_silence_len=self.min_silence_duration,
@@ -2306,8 +2265,8 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(70)
             QApplication.processEvents()
             
-            print(f"Number of non-silent ranges detected: {len(non_silent_ranges)}")
             if non_silent_ranges:
+                pass
                 for i, (start, end) in enumerate(non_silent_ranges[:5]):  # Show first 5
                     print(f"  Non-silent range {i+1}: {start}ms - {end}ms (duration: {end-start}ms)")
                 if len(non_silent_ranges) > 5:
@@ -2328,6 +2287,7 @@ class SilenceDetectionThread(QThread):
                 current_start, current_end = padded_ranges[0]
                 
                 for start, end in padded_ranges[1:]:
+                    pass
                     if start <= current_end:  # Overlap found
                         # Extend current range
                         current_end = max(current_end, end)
@@ -2339,7 +2299,6 @@ class SilenceDetectionThread(QThread):
                 # Add the last range
                 merged_ranges.append((current_start, current_end))
                 
-                print(f"After padding ({self.padding_ms}ms) and merging: {len(merged_ranges)} non-silent ranges")
                 non_silent_ranges = merged_ranges
             
             # Convert non-silent ranges to silent ranges
@@ -2348,7 +2307,6 @@ class SilenceDetectionThread(QThread):
             if len(non_silent_ranges) == 0:
                 # If no non-silent parts detected, the whole audio is silence
                 silent_ranges = [(0, audio_duration_ms)]
-                print(f"No non-silent parts detected, treating the entire audio as silence")
             else:
                 # Add silent range at the beginning if the first non-silent part doesn't start at 0
                 if non_silent_ranges[0][0] > 0:
@@ -2365,8 +2323,8 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(80)
             QApplication.processEvents()
             
-            print(f"Number of initial silent ranges: {len(silent_ranges)}")
             if silent_ranges:
+                pass
                 for i, (start, end) in enumerate(silent_ranges[:5]):  # Show first 5
                     print(f"  Silent range {i+1}: {start}ms - {end}ms (duration: {end-start}ms)")
                 if len(silent_ranges) > 5:
@@ -2374,7 +2332,6 @@ class SilenceDetectionThread(QThread):
             
             # Filter out silent ranges shorter than the minimum duration
             filtered_silent_ranges = [(start, end) for start, end in silent_ranges if end - start >= self.min_silence_duration]
-            print(f"After filtering by minimum duration ({self.min_silence_duration}ms): {len(filtered_silent_ranges)} silent ranges")
             
             self.progress_updated.emit(90)
             QApplication.processEvents()
@@ -2397,6 +2354,7 @@ class SilenceDetectionThread(QThread):
             
             # Clean up temp file (only for video files)
             if not is_audio_only:
+                pass
                 try:
                     os.unlink(temp_audio_path)
                 except:
@@ -2413,8 +2371,6 @@ class SilenceDetectionThread(QThread):
             QApplication.processEvents()
             
             # Emit results
-            print(f"Final silent parts count: {len(silent_parts)}")
-            print(f"---------- ACCURATE SILENCE DETECTION END ----------\n")
             self.detection_complete.emit(silent_parts)
             
         except Exception as e:
@@ -2426,8 +2382,7 @@ class SilenceDetectionThread(QThread):
     def run_fast_ffmpeg_detection(self):
         """Fast silence detection using FFmpeg's silencedetect filter - much faster than pydub"""
         try:
-            print(f"\n---------- FAST SILENCE DETECTION START ----------")
-            print(f"Using FFmpeg silencedetect filter for maximum speed")
+            pass
             
             # Progress update
             self.progress_updated.emit(10)
@@ -2449,7 +2404,6 @@ class SilenceDetectionThread(QThread):
             QApplication.processEvents()
             
             # Run FFmpeg and capture output
-            print(f"Running fast FFmpeg silence detection...")
             result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -2468,13 +2422,16 @@ class SilenceDetectionThread(QThread):
             
             # Parse FFmpeg output for silence detection
             for line in result.stderr.split('\n'):
+                pass
                 if 'silence_start:' in line:
+                    pass
                     try:
                         start_time = float(line.split('silence_start:')[1].strip())
                         silence_starts.append(start_time)
                     except:
                         pass
                 elif 'silence_end:' in line:
+                    pass
                     try:
                         end_time = float(line.split('silence_end:')[1].split('|')[0].strip())
                         silence_ends.append(end_time)
@@ -2483,6 +2440,7 @@ class SilenceDetectionThread(QThread):
             
             # Create silence parts from starts and ends
             for i, start in enumerate(silence_starts):
+                pass
                 if i < len(silence_ends):
                     end = silence_ends[i]
                     duration_ms = int((end - start) * 1000)
@@ -2511,14 +2469,11 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(100)
             QApplication.processEvents()
             
-            print(f"Fast FFmpeg detection completed: {len(silent_parts)} silent parts found")
-            print(f"---------- FAST SILENCE DETECTION END ----------\n")
             
             return silent_parts
             
         except Exception as e:
             print(f"Fast FFmpeg detection failed: {e}")
-            print("Falling back to slower detection method...")
             return None
 
 class AudioProcessingThread(QThread):
@@ -2543,6 +2498,7 @@ class AudioProcessingThread(QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"
         except Exception:
             pass
@@ -2554,14 +2510,16 @@ class AudioProcessingThread(QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         return "ffmpeg"
     
     def run(self):
         try:
-            print(f"🎵 Processing audio file: {self.audio_path}")
+            pass
             
             # Load audio using pydub
             from pydub import AudioSegment
@@ -2575,6 +2533,7 @@ class AudioProcessingThread(QThread):
             last_end = 0
             
             for part in sorted_parts:
+                pass
                 if part['selected']:  # Only cut if selected
                     if part['start'] > last_end:
                         # Add segment before the silence (convert seconds to milliseconds)
@@ -2627,7 +2586,6 @@ class AudioProcessingThread(QThread):
                 result_audio.export(self.output_path, format="mp3", bitrate="192k")
             
             self.progress_updated.emit(100)
-            print(f"✅ Audio processing completed: {self.output_path}")
             self.processing_complete.emit(self.output_path)
             
         except Exception as e:
@@ -2666,6 +2624,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -2677,7 +2636,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -2690,6 +2651,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
         """
         # Check if file exists
         if not os.path.isfile(video_path):
+            pass
             return False, f"Video file not found: {video_path}"
             
         # Try to get video info using FFmpeg
@@ -2712,9 +2674,12 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             # Check for errors in stderr
             stderr = process.stderr.decode('utf-8', errors='ignore')
             if process.returncode != 0:
+                pass
                 if stderr:
+                    pass
                     return False, f"FFmpeg reported errors: {stderr}"
                 else:
+                    pass
                     return False, "Unknown FFmpeg error when validating video file"
                     
             # If we got here, the file seems valid
@@ -2732,7 +2697,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 return
             
             # Fallback to MoviePy processing with hardware acceleration if FFmpeg failed
-            print("\n---------- FALLBACK TO MOVIEPY WITH HARDWARE ACCELERATION ----------")
             
             # Get the FFmpeg path - try environment or fallback to known location
             ffmpeg_path = self.get_ffmpeg_path()
@@ -2742,17 +2706,14 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 mp.config.change_settings({"FFMPEG_BINARY": ffmpeg_path})
             
             # Validate the video file first
-            print(f"Validating video file: {self.video_path}")
             is_valid, error_message = self.validate_video_file(self.video_path)
             if not is_valid:
-                print(f"Video validation failed: {error_message}")
                 raise RuntimeError(f"Video file validation failed: {error_message}")
             
             # Check if input file exists
             if not os.path.exists(self.video_path):
                 raise FileNotFoundError(f"Video file not found: {self.video_path}")
             
-            print(f"Loading video from: {self.video_path}")
             
             # Initialize VideoFileClip with explicit parameters for better compatibility
             video = None
@@ -2761,11 +2722,8 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 video = mp.VideoFileClip(self.video_path, audio=True, verbose=False)
                 # Test video access to make sure it can be read
                 test_frame = video.get_frame(0)  # Get first frame to test
-                print(f"Video loaded successfully. Duration: {video.duration}s")
             except Exception as initial_error:
-                print(f"Error during standard video loading: {str(initial_error)}")
                 # If standard loading fails, try alternative approach
-                print("Attempting alternative loading method...")
                 try:
                     # We'll try to create a fresh copy of the video to work with
                     temp_video_path = os.path.join(tempfile.gettempdir(), f"temp_video_{int(time.time())}.mp4")
@@ -2781,7 +2739,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                         "-y",  # Overwrite if exists
                         temp_video_path
                     ]
-                    print(f"Running FFmpeg to create a clean copy: {' '.join(cmd)}")
                     result = subprocess.run(
                         cmd,
                         stdout=subprocess.PIPE,
@@ -2791,22 +2748,17 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     if result.returncode != 0:
                         stderr = result.stderr.decode('utf-8', errors='ignore')
-                        print(f"FFmpeg copy failed: {stderr}")
                         raise RuntimeError(f"Failed to create a clean video copy: {stderr}")
                     
                     # Now try to load the clean copy
                     video = mp.VideoFileClip(temp_video_path, audio=True, verbose=False)
                     test_frame = video.get_frame(0)  # Test again
-                    print(f"Successfully loaded video with alternative method. Duration: {video.duration}s")
                     
                     # Update the video path to use the clean copy
-                    print(f"Using temporary video file: {temp_video_path}")
                     self.video_path = temp_video_path
                 except Exception as alt_error:
-                    print(f"Alternative loading method also failed: {str(alt_error)}")
                     raise RuntimeError(f"Could not load video file using any method: {str(initial_error)}\nAlternative method error: {str(alt_error)}")
             
-            print(f"Video loaded, audio duration: {video.audio.duration} ms")
             
             # Process the silent parts to get a list of segments
             sorted_parts = sorted(self.silent_parts, key=lambda x: x['start'])
@@ -2817,6 +2769,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             QApplication.processEvents()
             
             for part in sorted_parts:
+                pass
                 if part['selected']:  # Only cut if selected
                     if part['start'] > last_end:
                         # Add segment before the silence
@@ -2831,6 +2784,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             # Add the final segment if needed
             if last_end < video.duration:
+                pass
                 try:
                     final_segment = video.subclip(last_end, video.duration)
                     segments.append(final_segment)
@@ -2842,9 +2796,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             # If no segments were cut, just use the original video
             if not segments:
-                print("No silent segments were cut, using original video")
                 result = video
             else:
+                pass
                 try:
                     # Concatenate all segments
                     print(f"Concatenating {len(segments)} video segments")
@@ -2852,7 +2806,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 except Exception as e:
                     print(f"Error concatenating clips: {str(e)}")
                     # Fallback to using the original video
-                    print("Fallback to original video")
                     result = video
                     # Clean up segments to avoid memory leaks
                     for segment in segments:
@@ -2876,7 +2829,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 
                 # Check for timeout
                 if elapsed_total > self.processing_timeout:
-                    print(f"MoviePy processing timeout after {self.processing_timeout} seconds")
                     timer.stop()
                     return
                 
@@ -2920,13 +2872,11 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 # Detect hardware acceleration for MoviePy export
                 hw_options = self.detect_hardware_acceleration()
                 video_codec, hw_name = hw_options[0]
-                print(f"MoviePy export using {hw_name}")
                 
                 # Prepare FFmpeg parameters for hardware acceleration
                 # Use resolution-optimized parameters if available
                 if RESOLUTION_OPTIMIZER_AVAILABLE and hasattr(self, 'optimization_settings'):
                     ffmpeg_params = self.get_optimized_ffmpeg_params(video_codec)
-                    print(f"🎯 Using {self.optimization_settings.get('category', 'Unknown')} optimized encoding parameters")
                 else:
                     # Fallback to standard parameters
                     ffmpeg_params = ["-pix_fmt", "yuv420p"]  # Standard pixel format
@@ -2961,7 +2911,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                         ])
                 
                 # Export the result with hardware acceleration
-                print(f"Writing output to: {self.output_path}")
                 result.write_videofile(
                     self.output_path, 
                     codec=video_codec,  # Use detected hardware codec
@@ -2981,10 +2930,8 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     # Get file size for reporting (but don't block on it)
                     try:
                         file_size = os.path.getsize(self.output_path)
-                        print(f"MoviePy processing completed successfully")
-                        print(f"Output file size: {file_size / (1024*1024):.1f} MB")
                     except:
-                        print(f"MoviePy processing completed successfully")
+                        pass
                 else:
                     raise RuntimeError("Output file was not created by MoviePy")
                     
@@ -2995,6 +2942,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             finally:
                 # Clean up resources
                 try:
+                    pass
                     if 'video' in locals():
                         video.close()
                     if 'result' in locals() and result != video:
@@ -3029,7 +2977,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_nvenc', 'NVIDIA NVENC'))
-                print("✓ NVIDIA NVENC hardware acceleration available")
         except:
             pass
             
@@ -3042,7 +2989,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_qsv', 'Intel QuickSync'))
-                print("✓ Intel QuickSync hardware acceleration available")
         except:
             pass
             
@@ -3055,31 +3001,28 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_amf', 'AMD AMF'))
-                print("✓ AMD AMF hardware acceleration available")
         except:
             pass
             
         # Fallback to software encoding
         if not hw_options:
             hw_options.append(('libx264', 'Software (CPU)'))
-            print("ℹ Using software encoding (no hardware acceleration detected)")
             
         return hw_options
 
     def run_fast_ffmpeg_processing(self):
         """Fast video processing using direct FFmpeg with hardware acceleration"""
         try:
-            print(f"\n---------- HARDWARE-ACCELERATED FFMPEG PROCESSING START ----------")
+            pass
             
             # Detect available hardware acceleration
             hw_options = self.detect_hardware_acceleration()
             video_codec, hw_name = hw_options[0]  # Use the first (best) available option
-            print(f"Using {hw_name} for video encoding")
             
             # Get selected silent parts
             selected_parts = [part for part in self.silent_parts if part['selected']]
             if not selected_parts:
-                print("No silent parts selected for cutting")
+                pass
                 return self.output_path
             
             # Cache video duration for progress calculation
@@ -3115,7 +3058,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 segment_count += 1
             
             if segment_count == 0:
-                print("No segments to keep after removing silence")
+                pass
                 return ""
             
             self.progress_updated.emit(30)
@@ -3152,7 +3095,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 # Remove the pixel format since it's already added above
                 optimized_params = [p for p in optimized_params if p != '-pix_fmt' and p != 'yuv420p']
                 cmd.extend(optimized_params)
-                print(f"🎯 Using {self.optimization_settings.get('category', 'Unknown')} optimized FFmpeg parameters")
             else:
                 # Fallback to standard parameters
                 if video_codec == 'h264_nvenc':
@@ -3195,10 +3137,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             self.progress_updated.emit(50)
             QApplication.processEvents()
             
-            print(f"Running hardware-accelerated FFmpeg processing with {hw_name}...")
             print(f"Command: {' '.join(cmd[:12])}...")  # Show partial command
-            print(f"Input file: {self.video_path}")
-            print(f"Output file: {self.output_path}")
             print(f"Filter complex: {filter_complex[:100]}...")  # Show first 100 chars
             
             # Run FFmpeg with progress monitoring
@@ -3228,11 +3167,13 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 while True:
                     line = process.stdout.readline()
                     if not line:
+                        pass
                         break
                     output_lines.append(line.strip())
                     
                     # Parse FFmpeg progress from time= output
                     if "time=" in line:
+                        pass
                         try:
                             # Extract time from FFmpeg output (format: time=00:01:23.45)
                             time_match = line.split("time=")[1].split()[0]
@@ -3256,9 +3197,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     # Look for completion indicators
                     if "video:" in line.lower() and "audio:" in line.lower() and "subtitle:" in line.lower():
-                        print(f"FFmpeg completion detected: {line.strip()}")
+                        pass
                     elif "error" in line.lower():
-                        print(f"FFmpeg error detected: {line.strip()}")
+                        pass
             
             # Start output reading thread
             output_thread = threading.Thread(target=read_output, daemon=True)
@@ -3284,6 +3225,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     # Look for time information in FFmpeg output
                     if "time=" in latest_output:
+                        pass
                         try:
                             time_match = latest_output.split("time=")[1].split()[0]
                             time_parts = time_match.split(":")
@@ -3363,25 +3305,21 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     elapsed_total = time.time() - start_time
                     if file_size > 0:
-                        print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
-                        print(f"Output file size: {file_size / (1024*1024):.1f} MB")
+                        pass
                     else:
-                        print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
-                    print(f"---------- HARDWARE-ACCELERATED FFMPEG PROCESSING END ----------\n")
+                        pass
                     return self.output_path
                 else:
-                    print("Output file was not created, FFmpeg may have failed silently")
+                    pass
                     return ""
             else:
-                print(f"Hardware-accelerated FFmpeg processing failed with return code {process.returncode}")
+                pass
                 if all_output:
                     print(f"FFmpeg output: {all_output[-500:]}")  # Show last 500 chars
-                print("Falling back to software encoding...")
                 return ""
                 
         except Exception as e:
             print(f"Hardware-accelerated FFmpeg processing error: {e}")
-            print("Falling back to software encoding...")
             return ""
 
 class SilencePreviewWidget(QWidget):
@@ -3408,6 +3346,7 @@ class SilencePreviewWidget(QWidget):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -3420,7 +3359,9 @@ class SilencePreviewWidget(QWidget):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -3609,11 +3550,13 @@ class TimelineWidget(QWidget):
     def keyPressEvent(self, event):
         """Handle keyboard shortcuts"""
         if event.modifiers() == Qt.ControlModifier:
+            pass
             if event.key() == Qt.Key_Z:
                 self.undo()
                 event.accept()
                 return
         elif event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+            pass
             if event.key() == Qt.Key_Z:
                 self.redo()
                 event.accept()
@@ -3634,7 +3577,6 @@ class TimelineWidget(QWidget):
             # Toggle debug info display
             self.show_debug_info = not self.show_debug_info
             self.update()
-            print(f"Debug info display: {'ON' if self.show_debug_info else 'OFF'}")
             event.accept()
             return
         elif event.key() == Qt.Key_B:
@@ -3717,7 +3659,6 @@ class TimelineWidget(QWidget):
         """Handle timeline widget resize - clear cache and force redraw for proper waveform scaling"""
         if hasattr(self, 'waveform_cache'):
             self.waveform_cache.clear()
-            print("  🌊 Timeline waveform cache cleared for resize")
         
         # Force immediate update to redraw waveform with new dimensions
         self.update()
@@ -3787,9 +3728,9 @@ class TimelineWidget(QWidget):
         self.waveform_data = waveform_data
         self.waveform_max_amplitude = max_amplitude
         if waveform_data:
-            print(f"⚡ Waveform loaded: {len(waveform_data)} samples, max amplitude: {max_amplitude:.3f}")
+            pass
         else:
-                print("No audio track found in video")
+            pass
         self.update()  # Trigger repaint
         
         # NOW hide the loading overlay since waveform loading is complete
@@ -3797,7 +3738,6 @@ class TimelineWidget(QWidget):
         while parent and not isinstance(parent, QMainWindow):
             parent = parent.parent()
         if parent and hasattr(parent, 'hide_loading_overlay'):
-            print("✅ Waveform loading complete - hiding loading overlay")
             QTimer.singleShot(500, parent.hide_loading_overlay)  # Small delay to show completion
         
     def on_waveform_progress(self, message):
@@ -3884,10 +3824,6 @@ class TimelineWidget(QWidget):
             if selected_silent_parts:
                 total_cuts_duration = sum(part['end'] - part['start'] for part in selected_silent_parts)
                 self.preview_timeline_duration = self.duration_seconds - total_cuts_duration
-                print(f"🎯 TIMELINE PREVIEW MODE:")
-                print(f"  Original duration: {self.duration_seconds:.3f}s")
-                print(f"  Total cuts: {total_cuts_duration:.3f}s") 
-                print(f"  Preview duration: {self.preview_timeline_duration:.3f}s")
             else:
                 self.preview_timeline_duration = self.duration_seconds
         else:
@@ -3910,18 +3846,18 @@ class TimelineWidget(QWidget):
             
         # Since we're always clicking on the original timeline/waveform, 
         # no conversion is needed - the click is already in original time coordinates
-        print(f"🎯 TIMELINE CLICK (No Conversion Needed):")
-        print(f"  Click position: {click_time_seconds:.3f}s (already in original timeline)")
         return click_time_seconds
         
     def original_time_to_preview_time(self, original_time):
         """Convert original video time to preview timeline position"""
         if not self.preview_mode or not self.silent_parts:
+            pass
             return original_time
             
         # Get selected silent parts (ones that will be cut)
         selected_silent_parts = [part for part in self.silent_parts if part['selected']]
         if not selected_silent_parts:
+            pass
             return original_time
             
         # Sort by start time
@@ -3932,6 +3868,7 @@ class TimelineWidget(QWidget):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 preview_segments.append((last_end, silent_part['start']))
@@ -3944,6 +3881,7 @@ class TimelineWidget(QWidget):
         # Convert original time to preview timeline position
         accumulated_preview_time = 0
         for start, end in preview_segments:
+            pass
             if start <= original_time <= end:
                 # The time is within this segment
                 offset_in_segment = original_time - start
@@ -3983,6 +3921,7 @@ class TimelineWidget(QWidget):
         """Convert time to X coordinate considering zoom and offset"""
         start_time, end_time = self.get_visible_time_range()
         if end_time == start_time:
+            pass
             return timeline_rect.left()
         relative_pos = (time_seconds - start_time) / (end_time - start_time)
         return timeline_rect.left() + relative_pos * timeline_rect.width()
@@ -3991,6 +3930,7 @@ class TimelineWidget(QWidget):
         """Convert original timeline time to X coordinate (for waveform and silence regions)"""
         start_time, end_time = self.get_original_visible_time_range()
         if end_time == start_time:
+            pass
             return timeline_rect.left()
         relative_pos = (time_seconds - start_time) / (end_time - start_time)
         return timeline_rect.left() + relative_pos * timeline_rect.width()
@@ -4004,11 +3944,6 @@ class TimelineWidget(QWidget):
         start_time, end_time = self.get_original_visible_time_range()
         original_time = start_time + relative_pos * (end_time - start_time)
         
-        print(f"🎯 X_TO_TIME CONVERSION:")
-        print(f"  Click X: {x:.1f}, Timeline width: {timeline_rect.width():.1f}")
-        print(f"  Relative pos: {relative_pos:.3f}")
-        print(f"  Visible range: {start_time:.3f}s - {end_time:.3f}s")
-        print(f"  Calculated original time: {original_time:.3f}s")
         
         return original_time
         
@@ -4042,7 +3977,6 @@ import queue
 try:
     from features import ManualCuttingManager, ManualCuttingIntegration
     MANUAL_CUTTING_AVAILABLE = True
-    print("✅ Manual cutting feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Manual cutting feature not available: {e}")
     MANUAL_CUTTING_AVAILABLE = False
@@ -4051,7 +3985,6 @@ except ImportError as e:
 try:
     from features.batch_processing import BatchProcessingIntegration
     BATCH_PROCESSING_AVAILABLE = True
-    print("✅ Batch processing feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Batch processing feature not available: {e}")
     BATCH_PROCESSING_AVAILABLE = False
@@ -4060,7 +3993,6 @@ except ImportError as e:
 try:
     from features.resolution_optimizer import ResolutionOptimizer, ResolutionAwareProcessingMixin
     RESOLUTION_OPTIMIZER_AVAILABLE = True
-    print("✅ Resolution optimizer loaded successfully")
 except ImportError as e:
     print(f"⚠️  Resolution optimizer not available: {e}")
     RESOLUTION_OPTIMIZER_AVAILABLE = False
@@ -4071,7 +4003,6 @@ try:
         detect_repeated_words, apply_repeated_word_removal
     )
     TRANSCRIPT_INTEGRATION_AVAILABLE = True
-    print("✅ Transcript integration loaded successfully")
 except ImportError as e:
     print(f"⚠️  Transcript integration not available: {e}")
     TRANSCRIPT_INTEGRATION_AVAILABLE = False
@@ -4110,6 +4041,7 @@ class CircularBuffer:
     def get(self, position):
         """Get item at specific position, returns None if not found"""
         with self.lock:
+            pass
             try:
                 index = list(self.positions).index(position)
                 self.hits += 1
@@ -4121,7 +4053,9 @@ class CircularBuffer:
     def get_nearest(self, position, tolerance=5):
         """Get nearest item within tolerance range"""
         with self.lock:
+            pass
             if not self.positions:
+                pass
                 return None
                 
             # Find closest position within tolerance
@@ -4135,6 +4069,7 @@ class CircularBuffer:
                     closest_diff = diff
                     
             if closest_pos is not None:
+                pass
                 try:
                     index = list(self.positions).index(closest_pos)
                     self.hits += 1
@@ -4195,6 +4130,7 @@ class AudioCircularBuffer:
     def put_samples(self, samples, start_time):
         """Add audio samples with timestamp"""
         with self.lock:
+            pass
             for i, sample in enumerate(samples):
                 timestamp = start_time + (i / self.sample_rate)
                 self.buffer.append(sample)
@@ -4203,14 +4139,18 @@ class AudioCircularBuffer:
     def get_samples(self, start_time, duration):
         """Get audio samples for specific time range"""
         with self.lock:
+            pass
             if not self.timestamps:
+                pass
                 return []
                 
             end_time = start_time + duration
             samples = []
             
             for i, timestamp in enumerate(self.timestamps):
+                pass
                 if start_time <= timestamp <= end_time:
+                    pass
                     if i < len(self.buffer):
                         samples.append(self.buffer[i])
                         
@@ -4308,10 +4248,8 @@ class VideoPlaybackThread(QThread):
                 video_clip = mp.VideoFileClip(self.video_path)
                 self.actual_duration = video_clip.duration
                 video_clip.close()
-                print(f"Video thread using exact duration: {self.actual_duration:.6f}s")
             except:
                 self.actual_duration = self.frame_count / self.fps if self.fps > 0 else 0
-                print(f"Fallback duration calculation: {self.actual_duration:.6f}s")
             
             # Calculate frame duration based on actual duration instead of FPS
             if self.frame_count > 0 and self.actual_duration > 0:
@@ -4319,8 +4257,6 @@ class VideoPlaybackThread(QThread):
             else:
                 self.frame_duration = 1.0 / self.fps
                 
-            print(f"Video initialized: detected {detected_fps} FPS, using {self.fps} FPS, {self.frame_count} frames, exact duration: {self.actual_duration:.6f}s, frame duration: {self.frame_duration:.6f}s")
-            print(f"✓ Video preview will use framerate: {self.fps} FPS (minimum 30 FPS enforced)")
             
             # Initialize audio
             self.initialize_audio()
@@ -4357,7 +4293,6 @@ class VideoPlaybackThread(QThread):
                 # Verify audio duration for synchronization
                 extracted_audio_duration = video_clip.audio.duration
                 video_duration = video_clip.duration
-                print(f"Audio sync verification: video={video_duration:.6f}s, audio={extracted_audio_duration:.6f}s")
                 
                 # Store the verified duration
                 self.verified_audio_duration = extracted_audio_duration
@@ -4366,7 +4301,7 @@ class VideoPlaybackThread(QThread):
                 if self.duration_difference > 0.1:
                     print(f"WARNING: Audio-video duration mismatch: {self.duration_difference:.3f}s difference")
                 else:
-                    print(f"✓ Audio-video duration sync verified (difference: {self.duration_difference:.3f}s)")
+                    pass
                 
                 video_clip.close()
                 
@@ -4374,9 +4309,8 @@ class VideoPlaybackThread(QThread):
                 pygame.mixer.music.load(self.temp_audio_file.name)
                 self.audio_loaded = True
                 self.preview_audio_segments = []  # Will store segmented audio for preview
-                print("Audio loaded successfully for preview (optimized)")
             else:
-                print("No audio track found in video")
+                pass
                 
         except Exception as e:
             print(f"Audio initialization failed: {e}")
@@ -4402,16 +4336,12 @@ class VideoPlaybackThread(QThread):
             current_time = time.time()
             self.playback_start_time = current_time - preview_position
             
-            print(f"🎵 PREVIEW PLAYBACK START:")
-            print(f"  Original position: {original_position:.6f}s")
-            print(f"  Preview position: {preview_position:.6f}s")
-            print(f"  Preview duration: {self.preview_duration:.6f}s")
             
             if self.audio_loaded:
+                pass
                 try:
                     # Play preview audio from the correct preview position
                     pygame.mixer.music.play(start=preview_position)
-                    print(f"✓ Preview audio started at {preview_position:.6f}s")
                 except Exception as e:
                     print(f"Error starting preview audio: {e}")
         else:
@@ -4444,15 +4374,12 @@ class VideoPlaybackThread(QThread):
             self.playback_start_time = current_time - current_position
             
             if self.audio_loaded:
+                pass
                 try:
                     # Enhanced audio start with synchronization verification
                     pygame.mixer.music.play(start=audio_position)
                     
                     # Log detailed playback synchronization info
-                    print(f"🎵 NORMAL PLAYBACK START:")
-                    print(f"  Video position: {current_position:.6f}s")
-                    print(f"  Audio position: {audio_position:.6f}s") 
-                    print(f"  Current frame: {self.current_frame}")
                     
                 except Exception as e:
                     print(f"Error starting audio: {e}")
@@ -4469,6 +4396,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.pause()
             except:
@@ -4501,10 +4429,10 @@ class VideoPlaybackThread(QThread):
         
         # Restart audio from new position if playing
         if self.audio_loaded and self.is_playing:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.music.play(start=precise_audio_position)
-                print(f"Seeked to frame {frame_number}, precise audio position: {precise_audio_position:.3f}s (ratio: {frame_ratio:.4f})")
                 
                 # Immediately update playback timing to compensate for pygame seeking inaccuracy
                 # We calculate the offset from expected position
@@ -4516,7 +4444,6 @@ class VideoPlaybackThread(QThread):
         else:
             # If not playing, still reset timing for when playback starts
             self.playback_start_time = current_time
-            print(f"Seeked to frame {frame_number} (paused), position: {precise_audio_position:.3f}s")
             
         self.mutex.unlock()
         
@@ -4555,23 +4482,17 @@ class VideoPlaybackThread(QThread):
             
             # Seek preview audio
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=target_time_seconds)  # Use preview timeline
                     
-                    print(f"🎵 PREVIEW SEEK:")
-                    print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                    print(f"  Original video time: {original_time:.6f}s")
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking preview audio: {e}")
             else:
-                print(f"🎵 PREVIEW SEEK (paused):")
-                print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                print(f"  Original video time: {original_time:.6f}s")
-                print(f"  Video frame: {target_frame}")
+                pass
         else:
             # Normal mode: use original timeline
             # Validate target time
@@ -4599,6 +4520,7 @@ class VideoPlaybackThread(QThread):
             
             # Verify audio position against timeline duration for perfect sync
             if hasattr(self, 'verified_audio_duration') and self.verified_audio_duration > 0:
+                pass
                 if exact_timeline_position > self.verified_audio_duration:
                     exact_timeline_position = self.verified_audio_duration
             
@@ -4609,23 +4531,17 @@ class VideoPlaybackThread(QThread):
             
             # Enhanced audio seeking with EXACT timeline position
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=exact_timeline_position)
                     
-                    print(f"🎵 NORMAL SEEK:")
-                    print(f"  Timeline position: {target_time_seconds:.6f}s")
-                    print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking audio: {e}")
             else:
-                print(f"🎵 NORMAL SEEK (paused):")
-                print(f"  Timeline position: {target_time_seconds:.6f}s")
-                print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                print(f"  Video frame: {target_frame}")
+                pass
         
         self.mutex.unlock()
         
@@ -4636,6 +4552,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
             except:
@@ -4645,6 +4562,7 @@ class VideoPlaybackThread(QThread):
     def run(self):
         """Main thread loop with optimized performance for preview mode"""
         if not self.initialize_video():
+            pass
             return
             
         # Use original video framerate for accurate playback
@@ -4699,6 +4617,7 @@ class VideoPlaybackThread(QThread):
                     self.mutex.unlock()
                     
                     if self.audio_loaded:
+                        pass
                         try:
                             pygame.mixer.music.stop()
                         except:
@@ -4714,11 +4633,11 @@ class VideoPlaybackThread(QThread):
                         self.mutex.unlock()
                         
                         if self.audio_loaded:
+                            pass
                             try:
                                 pygame.mixer.music.stop()
                             except:
                                 pass
-                        print("✓ Preview playback completed - reached end of segments")
                 
                 # Always process frames to maintain original framerate
                 should_process_frame = True
@@ -4742,7 +4661,6 @@ class VideoPlaybackThread(QThread):
                             if not hasattr(self, '_last_seek_debug') or time.time() - self._last_seek_debug > 1.0:
                                 self._last_seek_debug = time.time()
                                 elapsed_time = time.time() - current_playback_start
-                                print(f"🎬 VIDEO SEEK: preview_time={elapsed_time:.2f}s → seeking to frame {self.current_frame}")
                         elif seek_frame >= 0:
                             # Normal seeking behavior
                             self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
@@ -4799,6 +4717,7 @@ class VideoPlaybackThread(QThread):
         if hasattr(self, 'cap'):
             self.cap.release()
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.quit()
@@ -4841,7 +4760,6 @@ import queue
 try:
     from features import ManualCuttingManager, ManualCuttingIntegration
     MANUAL_CUTTING_AVAILABLE = True
-    print("✅ Manual cutting feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Manual cutting feature not available: {e}")
     MANUAL_CUTTING_AVAILABLE = False
@@ -4850,7 +4768,6 @@ except ImportError as e:
 try:
     from features.batch_processing import BatchProcessingIntegration
     BATCH_PROCESSING_AVAILABLE = True
-    print("✅ Batch processing feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Batch processing feature not available: {e}")
     BATCH_PROCESSING_AVAILABLE = False
@@ -4859,7 +4776,6 @@ except ImportError as e:
 try:
     from features.resolution_optimizer import ResolutionOptimizer, ResolutionAwareProcessingMixin
     RESOLUTION_OPTIMIZER_AVAILABLE = True
-    print("✅ Resolution optimizer loaded successfully")
 except ImportError as e:
     print(f"⚠️  Resolution optimizer not available: {e}")
     RESOLUTION_OPTIMIZER_AVAILABLE = False
@@ -4870,7 +4786,6 @@ try:
         detect_repeated_words, apply_repeated_word_removal
     )
     TRANSCRIPT_INTEGRATION_AVAILABLE = True
-    print("✅ Transcript integration loaded successfully")
 except ImportError as e:
     print(f"⚠️  Transcript integration not available: {e}")
     TRANSCRIPT_INTEGRATION_AVAILABLE = False
@@ -4909,6 +4824,7 @@ class CircularBuffer:
     def get(self, position):
         """Get item at specific position, returns None if not found"""
         with self.lock:
+            pass
             try:
                 index = list(self.positions).index(position)
                 self.hits += 1
@@ -4920,7 +4836,9 @@ class CircularBuffer:
     def get_nearest(self, position, tolerance=5):
         """Get nearest item within tolerance range"""
         with self.lock:
+            pass
             if not self.positions:
+                pass
                 return None
                 
             # Find closest position within tolerance
@@ -4934,6 +4852,7 @@ class CircularBuffer:
                     closest_diff = diff
                     
             if closest_pos is not None:
+                pass
                 try:
                     index = list(self.positions).index(closest_pos)
                     self.hits += 1
@@ -4994,6 +4913,7 @@ class AudioCircularBuffer:
     def put_samples(self, samples, start_time):
         """Add audio samples with timestamp"""
         with self.lock:
+            pass
             for i, sample in enumerate(samples):
                 timestamp = start_time + (i / self.sample_rate)
                 self.buffer.append(sample)
@@ -5002,14 +4922,18 @@ class AudioCircularBuffer:
     def get_samples(self, start_time, duration):
         """Get audio samples for specific time range"""
         with self.lock:
+            pass
             if not self.timestamps:
+                pass
                 return []
                 
             end_time = start_time + duration
             samples = []
             
             for i, timestamp in enumerate(self.timestamps):
+                pass
                 if start_time <= timestamp <= end_time:
+                    pass
                     if i < len(self.buffer):
                         samples.append(self.buffer[i])
                         
@@ -5107,10 +5031,8 @@ class VideoPlaybackThread(QThread):
                 video_clip = mp.VideoFileClip(self.video_path)
                 self.actual_duration = video_clip.duration
                 video_clip.close()
-                print(f"Video thread using exact duration: {self.actual_duration:.6f}s")
             except:
                 self.actual_duration = self.frame_count / self.fps if self.fps > 0 else 0
-                print(f"Fallback duration calculation: {self.actual_duration:.6f}s")
             
             # Calculate frame duration based on actual duration instead of FPS
             if self.frame_count > 0 and self.actual_duration > 0:
@@ -5118,8 +5040,6 @@ class VideoPlaybackThread(QThread):
             else:
                 self.frame_duration = 1.0 / self.fps
                 
-            print(f"Video initialized: detected {detected_fps} FPS, using {self.fps} FPS, {self.frame_count} frames, exact duration: {self.actual_duration:.6f}s, frame duration: {self.frame_duration:.6f}s")
-            print(f"✓ Video preview will use framerate: {self.fps} FPS (minimum 30 FPS enforced)")
             
             # Initialize audio
             self.initialize_audio()
@@ -5156,7 +5076,6 @@ class VideoPlaybackThread(QThread):
                 # Verify audio duration for synchronization
                 extracted_audio_duration = video_clip.audio.duration
                 video_duration = video_clip.duration
-                print(f"Audio sync verification: video={video_duration:.6f}s, audio={extracted_audio_duration:.6f}s")
                 
                 # Store the verified duration
                 self.verified_audio_duration = extracted_audio_duration
@@ -5165,7 +5084,7 @@ class VideoPlaybackThread(QThread):
                 if self.duration_difference > 0.1:
                     print(f"WARNING: Audio-video duration mismatch: {self.duration_difference:.3f}s difference")
                 else:
-                    print(f"✓ Audio-video duration sync verified (difference: {self.duration_difference:.3f}s)")
+                    pass
                 
                 video_clip.close()
                 
@@ -5173,9 +5092,8 @@ class VideoPlaybackThread(QThread):
                 pygame.mixer.music.load(self.temp_audio_file.name)
                 self.audio_loaded = True
                 self.preview_audio_segments = []  # Will store segmented audio for preview
-                print("Audio loaded successfully for preview (optimized)")
             else:
-                print("No audio track found in video")
+                pass
                 
         except Exception as e:
             print(f"Audio initialization failed: {e}")
@@ -5201,16 +5119,12 @@ class VideoPlaybackThread(QThread):
             current_time = time.time()
             self.playback_start_time = current_time - preview_position
             
-            print(f"🎵 PREVIEW PLAYBACK START:")
-            print(f"  Original position: {original_position:.6f}s")
-            print(f"  Preview position: {preview_position:.6f}s")
-            print(f"  Preview duration: {self.preview_duration:.6f}s")
             
             if self.audio_loaded:
+                pass
                 try:
                     # Play preview audio from the correct preview position
                     pygame.mixer.music.play(start=preview_position)
-                    print(f"✓ Preview audio started at {preview_position:.6f}s")
                 except Exception as e:
                     print(f"Error starting preview audio: {e}")
         else:
@@ -5243,15 +5157,12 @@ class VideoPlaybackThread(QThread):
             self.playback_start_time = current_time - current_position
             
             if self.audio_loaded:
+                pass
                 try:
                     # Enhanced audio start with synchronization verification
                     pygame.mixer.music.play(start=audio_position)
                     
                     # Log detailed playback synchronization info
-                    print(f"🎵 NORMAL PLAYBACK START:")
-                    print(f"  Video position: {current_position:.6f}s")
-                    print(f"  Audio position: {audio_position:.6f}s") 
-                    print(f"  Current frame: {self.current_frame}")
                     
                 except Exception as e:
                     print(f"Error starting audio: {e}")
@@ -5268,6 +5179,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.pause()
             except:
@@ -5300,10 +5212,10 @@ class VideoPlaybackThread(QThread):
         
         # Restart audio from new position if playing
         if self.audio_loaded and self.is_playing:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.music.play(start=precise_audio_position)
-                print(f"Seeked to frame {frame_number}, precise audio position: {precise_audio_position:.3f}s (ratio: {frame_ratio:.4f})")
                 
                 # Immediately update playback timing to compensate for pygame seeking inaccuracy
                 # We calculate the offset from expected position
@@ -5315,7 +5227,6 @@ class VideoPlaybackThread(QThread):
         else:
             # If not playing, still reset timing for when playback starts
             self.playback_start_time = current_time
-            print(f"Seeked to frame {frame_number} (paused), position: {precise_audio_position:.3f}s")
             
         self.mutex.unlock()
         
@@ -5354,23 +5265,17 @@ class VideoPlaybackThread(QThread):
             
             # Seek preview audio
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=target_time_seconds)  # Use preview timeline
                     
-                    print(f"🎵 PREVIEW SEEK:")
-                    print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                    print(f"  Original video time: {original_time:.6f}s")
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking preview audio: {e}")
             else:
-                print(f"🎵 PREVIEW SEEK (paused):")
-                print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                print(f"  Original video time: {original_time:.6f}s")
-                print(f"  Video frame: {target_frame}")
+                pass
         else:
             # Normal mode: use original timeline
             # Validate target time
@@ -5398,6 +5303,7 @@ class VideoPlaybackThread(QThread):
             
             # Verify audio position against timeline duration for perfect sync
             if hasattr(self, 'verified_audio_duration') and self.verified_audio_duration > 0:
+                pass
                 if exact_timeline_position > self.verified_audio_duration:
                     exact_timeline_position = self.verified_audio_duration
             
@@ -5408,23 +5314,17 @@ class VideoPlaybackThread(QThread):
             
             # Enhanced audio seeking with EXACT timeline position
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=exact_timeline_position)
                     
-                    print(f"🎵 NORMAL SEEK:")
-                    print(f"  Timeline position: {target_time_seconds:.6f}s")
-                    print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking audio: {e}")
             else:
-                print(f"🎵 NORMAL SEEK (paused):")
-                print(f"  Timeline position: {target_time_seconds:.6f}s")
-                print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                print(f"  Video frame: {target_frame}")
+                pass
         
         self.mutex.unlock()
         
@@ -5435,6 +5335,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
             except:
@@ -5444,6 +5345,7 @@ class VideoPlaybackThread(QThread):
     def run(self):
         """Main thread loop with optimized performance for preview mode"""
         if not self.initialize_video():
+            pass
             return
             
         # Use original video framerate for accurate playback
@@ -5498,6 +5400,7 @@ class VideoPlaybackThread(QThread):
                     self.mutex.unlock()
                     
                     if self.audio_loaded:
+                        pass
                         try:
                             pygame.mixer.music.stop()
                         except:
@@ -5513,11 +5416,11 @@ class VideoPlaybackThread(QThread):
                         self.mutex.unlock()
                         
                         if self.audio_loaded:
+                            pass
                             try:
                                 pygame.mixer.music.stop()
                             except:
                                 pass
-                        print("✓ Preview playback completed - reached end of segments")
                 
                 # Always process frames to maintain original framerate
                 should_process_frame = True
@@ -5541,7 +5444,6 @@ class VideoPlaybackThread(QThread):
                             if not hasattr(self, '_last_seek_debug') or time.time() - self._last_seek_debug > 1.0:
                                 self._last_seek_debug = time.time()
                                 elapsed_time = time.time() - current_playback_start
-                                print(f"🎬 VIDEO SEEK: preview_time={elapsed_time:.2f}s → seeking to frame {self.current_frame}")
                         elif seek_frame >= 0:
                             # Normal seeking behavior
                             self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
@@ -5598,6 +5500,7 @@ class VideoPlaybackThread(QThread):
         if hasattr(self, 'cap'):
             self.cap.release()
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.quit()
@@ -5613,6 +5516,7 @@ class VideoPlaybackThread(QThread):
     def handle_preview_playback_optimized(self, elapsed_time, initial_frame):
         """Optimized preview playback with cached calculations"""
         if not self.preview_segments:
+            pass
             return initial_frame
             
         # Cache segment lookup for performance
@@ -5640,7 +5544,6 @@ class VideoPlaybackThread(QThread):
                     # Debug output to show frame skipping (only occasionally to avoid spam)
                     if not hasattr(self, '_last_debug_time') or elapsed_time - self._last_debug_time > 2.0:
                         self._last_debug_time = elapsed_time
-                        print(f"🎬 PREVIEW FRAME SKIP: preview_time={elapsed_time:.2f}s → original_time={target_original_time:.2f}s → frame={self._cached_target_frame}")
                     
                     break
                     
@@ -5694,6 +5597,7 @@ class VideoPlaybackThread(QThread):
             pixmap = QPixmap.fromImage(qt_image)
             return pixmap
         except:
+            pass
             return None
             
     def process_frame_ultra_fast(self, frame):
@@ -5737,23 +5641,28 @@ class VideoPlaybackThread(QThread):
             pixmap = QPixmap.fromImage(qt_image)
             return pixmap
         except:
+            pass
             return None
             
     def prefetch_frames(self, current_frame):
         """Prefetch nearby frames for smoother playback - lightweight version"""
         if not self.buffer_enabled or not self.prefetch_enabled:
+            pass
             return
             
         # Only prefetch 2-3 frames ahead to minimize performance impact
         def prefetch_worker():
             try:
+                pass
                 for offset in range(1, min(self.prefetch_range, 3)):  # Only 2-3 frames ahead
                     target_frame = current_frame + offset
                     if target_frame >= self.frame_count:
+                        pass
                         break
                         
                     # Check if frame is already in buffer
                     if self.frame_buffer.get(target_frame) is not None:
+                        pass
                         continue
                         
                     # Use existing video capture instead of creating new one
@@ -5782,7 +5691,6 @@ class VideoPlaybackThread(QThread):
     def enable_prefetch(self):
         """Enable prefetch after initial loading is complete"""
         self.prefetch_enabled = True
-        print("🚀 Frame prefetching enabled for smoother playback")
         
     def disable_prefetch(self):
         """Disable prefetch during heavy operations"""
@@ -5810,11 +5718,10 @@ class VideoPlaybackThread(QThread):
                 # Load the preview audio into pygame
                 try:
                     pygame.mixer.music.load(self.temp_preview_audio_file.name)
-                    print("✓ Preview audio loaded successfully - silent parts will be skipped during playback")
                 except Exception as e:
                     print(f"Error loading preview audio: {e}")
             else:
-                print("Failed to create preview audio - using original audio")
+                pass
         else:
             self.silent_parts = []
             self.preview_segments = []
@@ -5822,9 +5729,9 @@ class VideoPlaybackThread(QThread):
             
             # Restore original audio
             if self.audio_loaded and hasattr(self, 'temp_audio_file'):
+                pass
                 try:
                     pygame.mixer.music.load(self.temp_audio_file.name)
-                    print("✓ Original audio restored")
                 except Exception as e:
                     print(f"Error restoring original audio: {e}")
         self.mutex.unlock()
@@ -5832,6 +5739,7 @@ class VideoPlaybackThread(QThread):
     def get_effective_duration(self):
         """Get the effective timeline duration (preview duration in preview mode, original otherwise)"""
         if self.preview_mode and hasattr(self, 'preview_timeline_duration') and self.preview_timeline_duration is not None:
+            pass
             return self.preview_timeline_duration
         return self.duration_seconds
         
@@ -5843,11 +5751,13 @@ class VideoPlaybackThread(QThread):
             
         # Preview mode: convert preview timeline position to original timeline position
         if not self.silent_parts:
+            pass
             return click_time_seconds
             
         # Get selected silent parts (ones that will be cut)
         selected_silent_parts = [part for part in self.silent_parts if part['selected']]
         if not selected_silent_parts:
+            pass
             return click_time_seconds
             
         # Sort by start time
@@ -5858,6 +5768,7 @@ class VideoPlaybackThread(QThread):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 preview_segments.append((last_end, silent_part['start']))
@@ -5869,6 +5780,7 @@ class VideoPlaybackThread(QThread):
             
         # Convert preview timeline position to original time
         if click_time_seconds <= 0:
+            pass
             return preview_segments[0][0] if preview_segments else 0
             
         accumulated_time = 0
@@ -5878,10 +5790,6 @@ class VideoPlaybackThread(QThread):
                 # The position is within this segment
                 offset_in_segment = click_time_seconds - accumulated_time
                 original_time = start + offset_in_segment
-                print(f"🎯 TIMELINE CLICK CONVERSION:")
-                print(f"  Preview click: {click_time_seconds:.3f}s")
-                print(f"  Original time: {original_time:.3f}s")
-                print(f"  Segment: {start:.3f}s - {end:.3f}s")
                 return original_time
             accumulated_time += segment_duration
             
@@ -5910,6 +5818,7 @@ class VideoPlaybackThread(QThread):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 self.preview_segments.append((last_end, silent_part['start']))
@@ -5922,16 +5831,17 @@ class VideoPlaybackThread(QThread):
         # Calculate total preview duration correctly
         self.preview_duration = sum(end - start for start, end in self.preview_segments)
         
-        print(f"Preview segments calculated: {len(self.preview_segments)} segments, duration: {self.preview_duration:.3f}s")
         for i, (start, end) in enumerate(self.preview_segments):
             print(f"  Segment {i+1}: {start:.3f}s - {end:.3f}s (duration: {end-start:.3f}s)")
         
     def preview_time_to_original_time(self, preview_time):
         """Convert preview timeline position to original video time"""
         if not self.preview_mode or not self.preview_segments:
+            pass
             return preview_time
             
         if preview_time <= 0:
+            pass
             return self.preview_segments[0][0] if self.preview_segments else 0
             
         accumulated_time = 0
@@ -5949,10 +5859,12 @@ class VideoPlaybackThread(QThread):
     def original_time_to_preview_time(self, original_time):
         """Convert original video time to preview timeline position"""
         if not self.preview_mode or not self.preview_segments:
+            pass
             return original_time
             
         accumulated_preview_time = 0
         for start, end in self.preview_segments:
+            pass
             if start <= original_time <= end:
                 # The time is within this segment
                 offset_in_segment = original_time - start
@@ -5970,6 +5882,7 @@ class VideoPlaybackThread(QThread):
     def create_preview_audio(self):
         """Create segmented audio file for preview mode that skips silent parts"""
         if not self.preview_segments or not self.audio_loaded:
+            pass
             return False
             
         try:
@@ -5977,7 +5890,6 @@ class VideoPlaybackThread(QThread):
             import moviepy.editor as mp
             from pydub import AudioSegment
             
-            print("Creating preview audio with silent parts removed...")
             
             # Load the original audio
             original_audio = AudioSegment.from_file(self.temp_audio_file.name)
@@ -5991,7 +5903,6 @@ class VideoPlaybackThread(QThread):
                 # Extract segment
                 segment = original_audio[start_ms:end_ms]
                 preview_audio_segments.append(segment)
-                print(f"  Added segment: {start_time:.2f}s - {end_time:.2f}s (duration: {(end_time-start_time):.2f}s)")
             
             # Concatenate all segments
             if preview_audio_segments:
@@ -6003,12 +5914,10 @@ class VideoPlaybackThread(QThread):
                 
                 preview_audio.export(self.temp_preview_audio_file.name, format="wav")
                 
-                print(f"Preview audio created: {len(preview_audio_segments)} segments, total duration: {len(preview_audio)/1000:.2f}s")
-                print(f"Preview audio saved to: {self.temp_preview_audio_file.name}")
                 
                 return True
             else:
-                print("No preview segments to create audio from")
+                pass
                 return False
                 
         except Exception as e:
@@ -6028,7 +5937,7 @@ class WaveformLoadingThread(QThread):
     def run(self):
         """Load waveform data in background"""
         try:
-            print("🌊 Loading waveform in background...")
+            pass
             
             # Check if this is an audio-only file
             audio_extensions = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'}
@@ -6036,7 +5945,6 @@ class WaveformLoadingThread(QThread):
             is_audio_only = file_ext in audio_extensions
             
             if is_audio_only:
-                print(f"🎵 Loading audio-only file: {self.video_path}")
                 self.progress_updated.emit("Loading audio file...")
                 
                 # Load audio directly using pydub
@@ -6046,7 +5954,6 @@ class WaveformLoadingThread(QThread):
                 # Emit duration immediately for instant timeline setup
                 duration_seconds = len(audio) / 1000.0
                 self.duration_loaded.emit(duration_seconds)
-                print(f"🎵 Audio duration: {duration_seconds:.2f} seconds")
                 
                 self.progress_updated.emit("Processing audio data...")
                 
@@ -6083,7 +5990,6 @@ class WaveformLoadingThread(QThread):
                 max_amplitude = max(abs(s) for s in samples) if samples else 1.0
                 
                 self.progress_updated.emit("Audio waveform ready!")
-                print(f"🎵 Audio waveform generated: {len(samples)} samples, max amplitude: {max_amplitude:.3f}")
                 
                 # Emit the loaded waveform data
                 self.waveform_loaded.emit(samples, max_amplitude)
@@ -6091,7 +5997,6 @@ class WaveformLoadingThread(QThread):
                 
             else:
                 # Handle video files
-                print(f"🎬 Loading video file: {self.video_path}")
                 self.progress_updated.emit("Loading video file...")
                 
                 # Extract audio using MoviePy
@@ -6105,7 +6010,6 @@ class WaveformLoadingThread(QThread):
                 self.progress_updated.emit("Extracting audio track...")
                 
                 if video.audio is None:
-                    print("No audio track found in video")
                     self.waveform_loaded.emit(None, 0)
                     video.close()
                     return
@@ -6204,6 +6108,7 @@ class SilenceDetectionThread(QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -6216,7 +6121,9 @@ class SilenceDetectionThread(QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -6226,9 +6133,6 @@ class SilenceDetectionThread(QThread):
         try:
             # Use the accurate pydub-based detection for better results
             # Skip fast FFmpeg detection to maintain accuracy
-            print(f"\n---------- ACCURATE SILENCE DETECTION START ----------")
-            print(f"Using pydub for accurate silence detection")
-            print(f"Detecting silence with threshold: {self.silence_threshold} dB, min duration: {self.min_silence_duration} ms, padding: {self.padding_ms} ms")
             
             # Start with initial progress
             self.progress_updated.emit(5)
@@ -6240,15 +6144,12 @@ class SilenceDetectionThread(QThread):
             is_audio_only = file_ext in audio_extensions
             
             if is_audio_only:
-                print(f"Detected audio-only file: {self.video_path}")
                 self.progress_updated.emit(10)
                 QApplication.processEvents()
                 
                 # For audio files, load directly with pydub
-                print(f"Loading audio directly from: {self.video_path}")
                 audio = AudioSegment.from_file(self.video_path)
                 audio_duration_ms = len(audio)
-                print(f"Audio loaded directly: duration={audio_duration_ms}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
                 self.progress_updated.emit(40)
                 QApplication.processEvents()
                 
@@ -6266,14 +6167,12 @@ class SilenceDetectionThread(QThread):
                 change_settings({"FFMPEG_BINARY": self.ffmpeg_path})
                 
                 # Extract audio from video more efficiently
-                print(f"Loading video from: {self.video_path}")
                 self.progress_updated.emit(10)
                 QApplication.processEvents()
                 
                 # Load video more efficiently
                 video = mp.VideoFileClip(self.video_path)
                 audio_duration_ms = int(video.audio.duration * 1000)
-                print(f"Video loaded, audio duration: {audio_duration_ms} ms")
                 self.progress_updated.emit(20)
                 QApplication.processEvents()
                 
@@ -6281,7 +6180,6 @@ class SilenceDetectionThread(QThread):
                 temp_audio = tempfile.NamedTemporaryFile(suffix=f'_sid_{os.getpid()}_{int(time.time())}.wav', delete=False)
                 temp_audio_path = temp_audio.name
                 temp_audio.close()
-                print(f"Extracting audio to: {temp_audio_path}")
                 
                 self.progress_updated.emit(30)
                 QApplication.processEvents()
@@ -6294,14 +6192,11 @@ class SilenceDetectionThread(QThread):
                     codec='pcm_s16le',  # Fast codec
                     ffmpeg_params=['-ar', '22050']  # Lower sample rate for faster processing
                 )
-                print(f"Audio extracted successfully")
                 self.progress_updated.emit(50)
                 QApplication.processEvents()
                 
                 # Load audio and detect non-silent parts with optimized settings
-                print(f"Loading audio for accurate silence detection")
                 audio = AudioSegment.from_file(temp_audio_path)
-                print(f"Audio loaded: duration={len(audio)}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
                 self.progress_updated.emit(60)
                 QApplication.processEvents()
                 
@@ -6310,7 +6205,6 @@ class SilenceDetectionThread(QThread):
                     audio = audio.set_channels(1)
             
             # Detect non-silent parts with optimized parameters
-            print(f"Detecting non-silent parts with silence threshold={self.silence_threshold}dB, min_silence_len={self.min_silence_duration}ms")
             non_silent_ranges = detect_nonsilent(
                 audio,
                 min_silence_len=self.min_silence_duration,
@@ -6320,8 +6214,8 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(70)
             QApplication.processEvents()
             
-            print(f"Number of non-silent ranges detected: {len(non_silent_ranges)}")
             if non_silent_ranges:
+                pass
                 for i, (start, end) in enumerate(non_silent_ranges[:5]):  # Show first 5
                     print(f"  Non-silent range {i+1}: {start}ms - {end}ms (duration: {end-start}ms)")
                 if len(non_silent_ranges) > 5:
@@ -6342,6 +6236,7 @@ class SilenceDetectionThread(QThread):
                 current_start, current_end = padded_ranges[0]
                 
                 for start, end in padded_ranges[1:]:
+                    pass
                     if start <= current_end:  # Overlap found
                         # Extend current range
                         current_end = max(current_end, end)
@@ -6353,7 +6248,6 @@ class SilenceDetectionThread(QThread):
                 # Add the last range
                 merged_ranges.append((current_start, current_end))
                 
-                print(f"After padding ({self.padding_ms}ms) and merging: {len(merged_ranges)} non-silent ranges")
                 non_silent_ranges = merged_ranges
             
             # Convert non-silent ranges to silent ranges
@@ -6362,7 +6256,6 @@ class SilenceDetectionThread(QThread):
             if len(non_silent_ranges) == 0:
                 # If no non-silent parts detected, the whole audio is silence
                 silent_ranges = [(0, audio_duration_ms)]
-                print(f"No non-silent parts detected, treating the entire audio as silence")
             else:
                 # Add silent range at the beginning if the first non-silent part doesn't start at 0
                 if non_silent_ranges[0][0] > 0:
@@ -6379,8 +6272,8 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(80)
             QApplication.processEvents()
             
-            print(f"Number of initial silent ranges: {len(silent_ranges)}")
             if silent_ranges:
+                pass
                 for i, (start, end) in enumerate(silent_ranges[:5]):  # Show first 5
                     print(f"  Silent range {i+1}: {start}ms - {end}ms (duration: {end-start}ms)")
                 if len(silent_ranges) > 5:
@@ -6388,7 +6281,6 @@ class SilenceDetectionThread(QThread):
             
             # Filter out silent ranges shorter than the minimum duration
             filtered_silent_ranges = [(start, end) for start, end in silent_ranges if end - start >= self.min_silence_duration]
-            print(f"After filtering by minimum duration ({self.min_silence_duration}ms): {len(filtered_silent_ranges)} silent ranges")
             
             self.progress_updated.emit(90)
             QApplication.processEvents()
@@ -6411,6 +6303,7 @@ class SilenceDetectionThread(QThread):
             
             # Clean up temp file (only for video files)
             if not is_audio_only:
+                pass
                 try:
                     os.unlink(temp_audio_path)
                 except:
@@ -6427,8 +6320,6 @@ class SilenceDetectionThread(QThread):
             QApplication.processEvents()
             
             # Emit results
-            print(f"Final silent parts count: {len(silent_parts)}")
-            print(f"---------- ACCURATE SILENCE DETECTION END ----------\n")
             self.detection_complete.emit(silent_parts)
             
         except Exception as e:
@@ -6440,8 +6331,7 @@ class SilenceDetectionThread(QThread):
     def run_fast_ffmpeg_detection(self):
         """Fast silence detection using FFmpeg's silencedetect filter - much faster than pydub"""
         try:
-            print(f"\n---------- FAST SILENCE DETECTION START ----------")
-            print(f"Using FFmpeg silencedetect filter for maximum speed")
+            pass
             
             # Progress update
             self.progress_updated.emit(10)
@@ -6463,7 +6353,6 @@ class SilenceDetectionThread(QThread):
             QApplication.processEvents()
             
             # Run FFmpeg and capture output
-            print(f"Running fast FFmpeg silence detection...")
             result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -6482,13 +6371,16 @@ class SilenceDetectionThread(QThread):
             
             # Parse FFmpeg output for silence detection
             for line in result.stderr.split('\n'):
+                pass
                 if 'silence_start:' in line:
+                    pass
                     try:
                         start_time = float(line.split('silence_start:')[1].strip())
                         silence_starts.append(start_time)
                     except:
                         pass
                 elif 'silence_end:' in line:
+                    pass
                     try:
                         end_time = float(line.split('silence_end:')[1].split('|')[0].strip())
                         silence_ends.append(end_time)
@@ -6497,6 +6389,7 @@ class SilenceDetectionThread(QThread):
             
             # Create silence parts from starts and ends
             for i, start in enumerate(silence_starts):
+                pass
                 if i < len(silence_ends):
                     end = silence_ends[i]
                     duration_ms = int((end - start) * 1000)
@@ -6525,14 +6418,11 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(100)
             QApplication.processEvents()
             
-            print(f"Fast FFmpeg detection completed: {len(silent_parts)} silent parts found")
-            print(f"---------- FAST SILENCE DETECTION END ----------\n")
             
             return silent_parts
             
         except Exception as e:
             print(f"Fast FFmpeg detection failed: {e}")
-            print("Falling back to slower detection method...")
             return None
 
 class AudioProcessingThread(QThread):
@@ -6557,6 +6447,7 @@ class AudioProcessingThread(QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"
         except Exception:
             pass
@@ -6568,14 +6459,16 @@ class AudioProcessingThread(QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         return "ffmpeg"
     
     def run(self):
         try:
-            print(f"🎵 Processing audio file: {self.audio_path}")
+            pass
             
             # Load audio using pydub
             from pydub import AudioSegment
@@ -6589,6 +6482,7 @@ class AudioProcessingThread(QThread):
             last_end = 0
             
             for part in sorted_parts:
+                pass
                 if part['selected']:  # Only cut if selected
                     if part['start'] > last_end:
                         # Add segment before the silence (convert seconds to milliseconds)
@@ -6641,7 +6535,6 @@ class AudioProcessingThread(QThread):
                 result_audio.export(self.output_path, format="mp3", bitrate="192k")
             
             self.progress_updated.emit(100)
-            print(f"✅ Audio processing completed: {self.output_path}")
             self.processing_complete.emit(self.output_path)
             
         except Exception as e:
@@ -6680,6 +6573,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -6691,7 +6585,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -6704,6 +6600,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
         """
         # Check if file exists
         if not os.path.isfile(video_path):
+            pass
             return False, f"Video file not found: {video_path}"
             
         # Try to get video info using FFmpeg
@@ -6726,9 +6623,12 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             # Check for errors in stderr
             stderr = process.stderr.decode('utf-8', errors='ignore')
             if process.returncode != 0:
+                pass
                 if stderr:
+                    pass
                     return False, f"FFmpeg reported errors: {stderr}"
                 else:
+                    pass
                     return False, "Unknown FFmpeg error when validating video file"
                     
             # If we got here, the file seems valid
@@ -6746,7 +6646,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 return
             
             # Fallback to MoviePy processing with hardware acceleration if FFmpeg failed
-            print("\n---------- FALLBACK TO MOVIEPY WITH HARDWARE ACCELERATION ----------")
             
             # Get the FFmpeg path - try environment or fallback to known location
             ffmpeg_path = self.get_ffmpeg_path()
@@ -6756,17 +6655,14 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 mp.config.change_settings({"FFMPEG_BINARY": ffmpeg_path})
             
             # Validate the video file first
-            print(f"Validating video file: {self.video_path}")
             is_valid, error_message = self.validate_video_file(self.video_path)
             if not is_valid:
-                print(f"Video validation failed: {error_message}")
                 raise RuntimeError(f"Video file validation failed: {error_message}")
             
             # Check if input file exists
             if not os.path.exists(self.video_path):
                 raise FileNotFoundError(f"Video file not found: {self.video_path}")
             
-            print(f"Loading video from: {self.video_path}")
             
             # Initialize VideoFileClip with explicit parameters for better compatibility
             video = None
@@ -6775,11 +6671,8 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 video = mp.VideoFileClip(self.video_path, audio=True, verbose=False)
                 # Test video access to make sure it can be read
                 test_frame = video.get_frame(0)  # Get first frame to test
-                print(f"Video loaded successfully. Duration: {video.duration}s")
             except Exception as initial_error:
-                print(f"Error during standard video loading: {str(initial_error)}")
                 # If standard loading fails, try alternative approach
-                print("Attempting alternative loading method...")
                 try:
                     # We'll try to create a fresh copy of the video to work with
                     temp_video_path = os.path.join(tempfile.gettempdir(), f"temp_video_{int(time.time())}.mp4")
@@ -6795,7 +6688,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                         "-y",  # Overwrite if exists
                         temp_video_path
                     ]
-                    print(f"Running FFmpeg to create a clean copy: {' '.join(cmd)}")
                     result = subprocess.run(
                         cmd,
                         stdout=subprocess.PIPE,
@@ -6805,22 +6697,17 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     if result.returncode != 0:
                         stderr = result.stderr.decode('utf-8', errors='ignore')
-                        print(f"FFmpeg copy failed: {stderr}")
                         raise RuntimeError(f"Failed to create a clean video copy: {stderr}")
                     
                     # Now try to load the clean copy
                     video = mp.VideoFileClip(temp_video_path, audio=True, verbose=False)
                     test_frame = video.get_frame(0)  # Test again
-                    print(f"Successfully loaded video with alternative method. Duration: {video.duration}s")
                     
                     # Update the video path to use the clean copy
-                    print(f"Using temporary video file: {temp_video_path}")
                     self.video_path = temp_video_path
                 except Exception as alt_error:
-                    print(f"Alternative loading method also failed: {str(alt_error)}")
                     raise RuntimeError(f"Could not load video file using any method: {str(initial_error)}\nAlternative method error: {str(alt_error)}")
             
-            print(f"Video loaded, audio duration: {video.audio.duration} ms")
             
             # Process the silent parts to get a list of segments
             sorted_parts = sorted(self.silent_parts, key=lambda x: x['start'])
@@ -6831,6 +6718,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             QApplication.processEvents()
             
             for part in sorted_parts:
+                pass
                 if part['selected']:  # Only cut if selected
                     if part['start'] > last_end:
                         # Add segment before the silence
@@ -6845,6 +6733,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             # Add the final segment if needed
             if last_end < video.duration:
+                pass
                 try:
                     final_segment = video.subclip(last_end, video.duration)
                     segments.append(final_segment)
@@ -6856,9 +6745,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             # If no segments were cut, just use the original video
             if not segments:
-                print("No silent segments were cut, using original video")
                 result = video
             else:
+                pass
                 try:
                     # Concatenate all segments
                     print(f"Concatenating {len(segments)} video segments")
@@ -6866,7 +6755,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 except Exception as e:
                     print(f"Error concatenating clips: {str(e)}")
                     # Fallback to using the original video
-                    print("Fallback to original video")
                     result = video
                     # Clean up segments to avoid memory leaks
                     for segment in segments:
@@ -6890,7 +6778,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 
                 # Check for timeout
                 if elapsed_total > self.processing_timeout:
-                    print(f"MoviePy processing timeout after {self.processing_timeout} seconds")
                     timer.stop()
                     return
                 
@@ -6934,13 +6821,11 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 # Detect hardware acceleration for MoviePy export
                 hw_options = self.detect_hardware_acceleration()
                 video_codec, hw_name = hw_options[0]
-                print(f"MoviePy export using {hw_name}")
                 
                 # Prepare FFmpeg parameters for hardware acceleration
                 # Use resolution-optimized parameters if available
                 if RESOLUTION_OPTIMIZER_AVAILABLE and hasattr(self, 'optimization_settings'):
                     ffmpeg_params = self.get_optimized_ffmpeg_params(video_codec)
-                    print(f"🎯 Using {self.optimization_settings.get('category', 'Unknown')} optimized encoding parameters")
                 else:
                     # Fallback to standard parameters
                     ffmpeg_params = ["-pix_fmt", "yuv420p"]  # Standard pixel format
@@ -6975,7 +6860,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                         ])
                 
                 # Export the result with hardware acceleration
-                print(f"Writing output to: {self.output_path}")
                 result.write_videofile(
                     self.output_path, 
                     codec=video_codec,  # Use detected hardware codec
@@ -6995,10 +6879,8 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     # Get file size for reporting (but don't block on it)
                     try:
                         file_size = os.path.getsize(self.output_path)
-                        print(f"MoviePy processing completed successfully")
-                        print(f"Output file size: {file_size / (1024*1024):.1f} MB")
                     except:
-                        print(f"MoviePy processing completed successfully")
+                        pass
                 else:
                     raise RuntimeError("Output file was not created by MoviePy")
                     
@@ -7009,6 +6891,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             finally:
                 # Clean up resources
                 try:
+                    pass
                     if 'video' in locals():
                         video.close()
                     if 'result' in locals() and result != video:
@@ -7043,7 +6926,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_nvenc', 'NVIDIA NVENC'))
-                print("✓ NVIDIA NVENC hardware acceleration available")
         except:
             pass
             
@@ -7056,7 +6938,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_qsv', 'Intel QuickSync'))
-                print("✓ Intel QuickSync hardware acceleration available")
         except:
             pass
             
@@ -7069,31 +6950,28 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_amf', 'AMD AMF'))
-                print("✓ AMD AMF hardware acceleration available")
         except:
             pass
             
         # Fallback to software encoding
         if not hw_options:
             hw_options.append(('libx264', 'Software (CPU)'))
-            print("ℹ Using software encoding (no hardware acceleration detected)")
             
         return hw_options
 
     def run_fast_ffmpeg_processing(self):
         """Fast video processing using direct FFmpeg with hardware acceleration"""
         try:
-            print(f"\n---------- HARDWARE-ACCELERATED FFMPEG PROCESSING START ----------")
+            pass
             
             # Detect available hardware acceleration
             hw_options = self.detect_hardware_acceleration()
             video_codec, hw_name = hw_options[0]  # Use the first (best) available option
-            print(f"Using {hw_name} for video encoding")
             
             # Get selected silent parts
             selected_parts = [part for part in self.silent_parts if part['selected']]
             if not selected_parts:
-                print("No silent parts selected for cutting")
+                pass
                 return self.output_path
             
             # Cache video duration for progress calculation
@@ -7129,7 +7007,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 segment_count += 1
             
             if segment_count == 0:
-                print("No segments to keep after removing silence")
+                pass
                 return ""
             
             self.progress_updated.emit(30)
@@ -7166,7 +7044,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 # Remove the pixel format since it's already added above
                 optimized_params = [p for p in optimized_params if p != '-pix_fmt' and p != 'yuv420p']
                 cmd.extend(optimized_params)
-                print(f"🎯 Using {self.optimization_settings.get('category', 'Unknown')} optimized FFmpeg parameters")
             else:
                 # Fallback to standard parameters
                 if video_codec == 'h264_nvenc':
@@ -7209,10 +7086,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             self.progress_updated.emit(50)
             QApplication.processEvents()
             
-            print(f"Running hardware-accelerated FFmpeg processing with {hw_name}...")
             print(f"Command: {' '.join(cmd[:12])}...")  # Show partial command
-            print(f"Input file: {self.video_path}")
-            print(f"Output file: {self.output_path}")
             print(f"Filter complex: {filter_complex[:100]}...")  # Show first 100 chars
             
             # Run FFmpeg with progress monitoring
@@ -7242,11 +7116,13 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 while True:
                     line = process.stdout.readline()
                     if not line:
+                        pass
                         break
                     output_lines.append(line.strip())
                     
                     # Parse FFmpeg progress from time= output
                     if "time=" in line:
+                        pass
                         try:
                             # Extract time from FFmpeg output (format: time=00:01:23.45)
                             time_match = line.split("time=")[1].split()[0]
@@ -7270,9 +7146,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     # Look for completion indicators
                     if "video:" in line.lower() and "audio:" in line.lower() and "subtitle:" in line.lower():
-                        print(f"FFmpeg completion detected: {line.strip()}")
+                        pass
                     elif "error" in line.lower():
-                        print(f"FFmpeg error detected: {line.strip()}")
+                        pass
             
             # Start output reading thread
             output_thread = threading.Thread(target=read_output, daemon=True)
@@ -7298,6 +7174,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     # Look for time information in FFmpeg output
                     if "time=" in latest_output:
+                        pass
                         try:
                             time_match = latest_output.split("time=")[1].split()[0]
                             time_parts = time_match.split(":")
@@ -7377,25 +7254,21 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     elapsed_total = time.time() - start_time
                     if file_size > 0:
-                        print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
-                        print(f"Output file size: {file_size / (1024*1024):.1f} MB")
+                        pass
                     else:
-                        print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
-                    print(f"---------- HARDWARE-ACCELERATED FFMPEG PROCESSING END ----------\n")
+                        pass
                     return self.output_path
                 else:
-                    print("Output file was not created, FFmpeg may have failed silently")
+                    pass
                     return ""
             else:
-                print(f"Hardware-accelerated FFmpeg processing failed with return code {process.returncode}")
+                pass
                 if all_output:
                     print(f"FFmpeg output: {all_output[-500:]}")  # Show last 500 chars
-                print("Falling back to software encoding...")
                 return ""
                 
         except Exception as e:
             print(f"Hardware-accelerated FFmpeg processing error: {e}")
-            print("Falling back to software encoding...")
             return ""
 
 class SilencePreviewWidget(QWidget):
@@ -7422,6 +7295,7 @@ class SilencePreviewWidget(QWidget):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -7434,7 +7308,9 @@ class SilencePreviewWidget(QWidget):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -7623,11 +7499,13 @@ class TimelineWidget(QWidget):
     def keyPressEvent(self, event):
         """Handle keyboard shortcuts"""
         if event.modifiers() == Qt.ControlModifier:
+            pass
             if event.key() == Qt.Key_Z:
                 self.undo()
                 event.accept()
                 return
         elif event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+            pass
             if event.key() == Qt.Key_Z:
                 self.redo()
                 event.accept()
@@ -7648,7 +7526,6 @@ class TimelineWidget(QWidget):
             # Toggle debug info display
             self.show_debug_info = not self.show_debug_info
             self.update()
-            print(f"Debug info display: {'ON' if self.show_debug_info else 'OFF'}")
             event.accept()
             return
         elif event.key() == Qt.Key_B:
@@ -7731,7 +7608,6 @@ class TimelineWidget(QWidget):
         """Handle timeline widget resize - clear cache and force redraw for proper waveform scaling"""
         if hasattr(self, 'waveform_cache'):
             self.waveform_cache.clear()
-            print("  🌊 Timeline waveform cache cleared for resize")
         
         # Force immediate update to redraw waveform with new dimensions
         self.update()
@@ -7801,9 +7677,9 @@ class TimelineWidget(QWidget):
         self.waveform_data = waveform_data
         self.waveform_max_amplitude = max_amplitude
         if waveform_data:
-            print(f"⚡ Waveform loaded: {len(waveform_data)} samples, max amplitude: {max_amplitude:.3f}")
+            pass
         else:
-                print("No audio track found in video")
+            pass
         self.update()  # Trigger repaint
         
         # NOW hide the loading overlay since waveform loading is complete
@@ -7811,7 +7687,6 @@ class TimelineWidget(QWidget):
         while parent and not isinstance(parent, QMainWindow):
             parent = parent.parent()
         if parent and hasattr(parent, 'hide_loading_overlay'):
-            print("✅ Waveform loading complete - hiding loading overlay")
             QTimer.singleShot(500, parent.hide_loading_overlay)  # Small delay to show completion
         
     def on_waveform_progress(self, message):
@@ -7898,10 +7773,6 @@ class TimelineWidget(QWidget):
             if selected_silent_parts:
                 total_cuts_duration = sum(part['end'] - part['start'] for part in selected_silent_parts)
                 self.preview_timeline_duration = self.duration_seconds - total_cuts_duration
-                print(f"🎯 TIMELINE PREVIEW MODE:")
-                print(f"  Original duration: {self.duration_seconds:.3f}s")
-                print(f"  Total cuts: {total_cuts_duration:.3f}s") 
-                print(f"  Preview duration: {self.preview_timeline_duration:.3f}s")
             else:
                 self.preview_timeline_duration = self.duration_seconds
         else:
@@ -7924,18 +7795,18 @@ class TimelineWidget(QWidget):
             
         # Since we're always clicking on the original timeline/waveform, 
         # no conversion is needed - the click is already in original time coordinates
-        print(f"🎯 TIMELINE CLICK (No Conversion Needed):")
-        print(f"  Click position: {click_time_seconds:.3f}s (already in original timeline)")
         return click_time_seconds
         
     def original_time_to_preview_time(self, original_time):
         """Convert original video time to preview timeline position"""
         if not self.preview_mode or not self.silent_parts:
+            pass
             return original_time
             
         # Get selected silent parts (ones that will be cut)
         selected_silent_parts = [part for part in self.silent_parts if part['selected']]
         if not selected_silent_parts:
+            pass
             return original_time
             
         # Sort by start time
@@ -7946,6 +7817,7 @@ class TimelineWidget(QWidget):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 preview_segments.append((last_end, silent_part['start']))
@@ -7958,6 +7830,7 @@ class TimelineWidget(QWidget):
         # Convert original time to preview timeline position
         accumulated_preview_time = 0
         for start, end in preview_segments:
+            pass
             if start <= original_time <= end:
                 # The time is within this segment
                 offset_in_segment = original_time - start
@@ -7997,6 +7870,7 @@ class TimelineWidget(QWidget):
         """Convert time to X coordinate considering zoom and offset"""
         start_time, end_time = self.get_visible_time_range()
         if end_time == start_time:
+            pass
             return timeline_rect.left()
         relative_pos = (time_seconds - start_time) / (end_time - start_time)
         return timeline_rect.left() + relative_pos * timeline_rect.width()
@@ -8005,6 +7879,7 @@ class TimelineWidget(QWidget):
         """Convert original timeline time to X coordinate (for waveform and silence regions)"""
         start_time, end_time = self.get_original_visible_time_range()
         if end_time == start_time:
+            pass
             return timeline_rect.left()
         relative_pos = (time_seconds - start_time) / (end_time - start_time)
         return timeline_rect.left() + relative_pos * timeline_rect.width()
@@ -8018,11 +7893,6 @@ class TimelineWidget(QWidget):
         start_time, end_time = self.get_original_visible_time_range()
         original_time = start_time + relative_pos * (end_time - start_time)
         
-        print(f"🎯 X_TO_TIME CONVERSION:")
-        print(f"  Click X: {x:.1f}, Timeline width: {timeline_rect.width():.1f}")
-        print(f"  Relative pos: {relative_pos:.3f}")
-        print(f"  Visible range: {start_time:.3f}s - {end_time:.3f}s")
-        print(f"  Calculated original time: {original_time:.3f}s")
         
         return original_time
         
@@ -8059,7 +7929,9 @@ class TimelineWidget(QWidget):
         
         # Draw silence regions
         for i, (start_ms, end_ms) in enumerate(self.silent_ranges):
+            pass
             if i >= len(self.silent_parts):
+                pass
                 continue
                 
             start_sec = start_ms / 1000
@@ -8067,6 +7939,7 @@ class TimelineWidget(QWidget):
             
             # Skip regions not in visible range (using original timeline)
             if end_sec < original_start_time or start_sec > original_end_time:
+                pass
                 continue
             
             # Calculate region position using original timeline coordinates
@@ -8079,6 +7952,7 @@ class TimelineWidget(QWidget):
             segment_type = part.get('type', 'silence')  # Default to silence if no type specified
             
             if part['selected']:
+                pass
                 if segment_type in ['repeated_word', 'repeated_phrase']:
                     # Purple/violet color for repeated words - different from red silence
                     color = QColor(147, 51, 234, 180)  # Modern purple with transparency  
@@ -8168,6 +8042,7 @@ class TimelineWidget(QWidget):
         current_marker = first_marker
         
         while current_marker <= original_end_time:
+            pass
             if current_marker >= 0:
                 marker_x = self.original_time_to_x(current_marker, timeline_rect)
                 if timeline_rect.left() <= marker_x <= timeline_rect.right():
@@ -8358,6 +8233,7 @@ class TimelineWidget(QWidget):
         # Calculate sample range to display based on ORIGINAL timeline
         total_duration = self.duration_seconds
         if total_duration <= 0:
+            pass
             return
             
         start_sample = int((start_time / total_duration) * len(self.waveform_data))
@@ -8366,11 +8242,13 @@ class TimelineWidget(QWidget):
         end_sample = min(len(self.waveform_data), end_sample)
         
         if start_sample >= end_sample:
+            pass
             return
             
         # Get visible samples
         visible_samples = self.waveform_data[start_sample:end_sample]
         if not visible_samples:
+            pass
             return
             
         # Calculate samples per pixel for the visible range
@@ -8387,6 +8265,7 @@ class TimelineWidget(QWidget):
             sample_end = min(sample_end, len(visible_samples))
             
             if sample_start >= len(visible_samples):
+                pass
                 break
                 
             # Get multiple amplitude measurements for better detail
@@ -8461,7 +8340,9 @@ class TimelineWidget(QWidget):
     def draw_cached_waveform(self, painter, timeline_rect, waveform_bars, waveform_center_y, waveform_height):
         """Draw waveform from cached data for improved performance"""
         for x, bar_data in enumerate(waveform_bars):
+            pass
             if x >= timeline_rect.width():
+                pass
                 break
                 
             # Handle both old and new cache formats
@@ -8510,6 +8391,7 @@ class TimelineWidget(QWidget):
     def draw_debug_info(self, painter, timeline_rect):
         """Draw debug information showing click position and playhead position"""
         if not self.show_debug_info:
+            pass
             return
             
         # Prepare debug text
@@ -8554,6 +8436,7 @@ class TimelineWidget(QWidget):
             debug_lines.append(f"Visible: {visible_start_str} - {visible_end_str}")
         
         if not debug_lines:
+            pass
             return
             
         # Set up drawing
@@ -8589,6 +8472,7 @@ class TimelineWidget(QWidget):
     def format_time_debug(self, seconds):
         """Format time with high precision for debug display"""
         if seconds < 0:
+            pass
             return "00:00.000"
         minutes = int(seconds // 60)
         secs = seconds % 60
@@ -8624,7 +8508,6 @@ class TimelineWidget(QWidget):
                 # Frame buffer stats
                 if 'frame_buffer' in stats:
                     fb_stats = stats['frame_buffer']
-                    print(f"🎬 Frame Buffer:")
                     print(f"   Cache Hit Rate: {fb_stats['hit_rate']:.1f}%")
                     print(f"   Hits: {fb_stats['hits']}, Misses: {fb_stats['misses']}")
                     print(f"   Buffer Size: {fb_stats['size']}/{fb_stats['max_size']}")
@@ -8632,18 +8515,16 @@ class TimelineWidget(QWidget):
                 # Waveform cache stats
                 if 'waveform_cache' in stats:
                     wc_stats = stats['waveform_cache']
-                    print(f"🌊 Waveform Cache:")
                     print(f"   Cached Zoom Levels: {wc_stats['size']}/{wc_stats['max_size']}")
                     
                 # Cache status
                 cache_status = "✅ ENABLED" if self.cache_enabled else "❌ DISABLED"
-                print(f"💾 Waveform Caching: {cache_status}")
                 
                 print("=" * 50)
                 print("Press 'B' again to refresh stats")
                 
             else:
-                print("📊 Buffer stats not available")
+                pass
                 
         except Exception as e:
             print(f"Error showing buffer stats: {e}")
@@ -8651,7 +8532,6 @@ class TimelineWidget(QWidget):
     def enable_caching(self):
         """Enable waveform caching after initial loading"""
         self.cache_during_loading = True
-        print("💾 Waveform caching enabled")
         
     def disable_caching(self):
         """Disable waveform caching during heavy operations"""
@@ -8659,6 +8539,7 @@ class TimelineWidget(QWidget):
         
     def mousePressEvent(self, event):
         if event.button() != Qt.LeftButton or self.duration_seconds <= 0:
+            pass
             return
         
         # Check if clicking on reset zoom button
@@ -8702,6 +8583,7 @@ class TimelineWidget(QWidget):
             
             # Skip regions not in visible range (use original timeline)
             if end_sec < original_start_time or start_sec > original_end_time:
+                pass
                 continue
             
             start_x = self.original_time_to_x(start_sec, timeline_rect)
@@ -8743,12 +8625,12 @@ class TimelineWidget(QWidget):
             # Instantly update playhead position for immediate visual feedback
             self.set_position(seek_time, instant=True)
             
-            print(f"Timeline click: seeking to {seek_time:.6f}s (high precision)")
             self.position_changed.emit(seek_time)
             self.seeking = True
             
     def mouseMoveEvent(self, event):
         if self.duration_seconds <= 0:
+            pass
             return
             
         # Calculate timeline area
@@ -8808,6 +8690,7 @@ class TimelineWidget(QWidget):
             
             # Skip regions not in visible range (use original timeline)
             if end_sec < original_start_time or start_sec > original_end_time:
+                pass
                 continue
             
             start_x = self.original_time_to_x(start_sec, timeline_rect)
@@ -8843,6 +8726,7 @@ class TimelineWidget(QWidget):
             button_hover = True
         
         if self.hover_region is None and not button_hover:
+            pass
             if timeline_rect.contains(click_x, click_y):
                 self.setCursor(Qt.ArrowCursor)
             else:
@@ -8853,6 +8737,7 @@ class TimelineWidget(QWidget):
     
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
+            pass
             if self.dragging_region is not None:
                 # Save state after dragging for undo functionality
                 self.save_state()
@@ -8898,7 +8783,6 @@ import queue
 try:
     from features import ManualCuttingManager, ManualCuttingIntegration
     MANUAL_CUTTING_AVAILABLE = True
-    print("✅ Manual cutting feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Manual cutting feature not available: {e}")
     MANUAL_CUTTING_AVAILABLE = False
@@ -8907,7 +8791,6 @@ except ImportError as e:
 try:
     from features.batch_processing import BatchProcessingIntegration
     BATCH_PROCESSING_AVAILABLE = True
-    print("✅ Batch processing feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Batch processing feature not available: {e}")
     BATCH_PROCESSING_AVAILABLE = False
@@ -8916,7 +8799,6 @@ except ImportError as e:
 try:
     from features.resolution_optimizer import ResolutionOptimizer, ResolutionAwareProcessingMixin
     RESOLUTION_OPTIMIZER_AVAILABLE = True
-    print("✅ Resolution optimizer loaded successfully")
 except ImportError as e:
     print(f"⚠️  Resolution optimizer not available: {e}")
     RESOLUTION_OPTIMIZER_AVAILABLE = False
@@ -8927,7 +8809,6 @@ try:
         detect_repeated_words, apply_repeated_word_removal
     )
     TRANSCRIPT_INTEGRATION_AVAILABLE = True
-    print("✅ Transcript integration loaded successfully")
 except ImportError as e:
     print(f"⚠️  Transcript integration not available: {e}")
     TRANSCRIPT_INTEGRATION_AVAILABLE = False
@@ -8966,6 +8847,7 @@ class CircularBuffer:
     def get(self, position):
         """Get item at specific position, returns None if not found"""
         with self.lock:
+            pass
             try:
                 index = list(self.positions).index(position)
                 self.hits += 1
@@ -8977,7 +8859,9 @@ class CircularBuffer:
     def get_nearest(self, position, tolerance=5):
         """Get nearest item within tolerance range"""
         with self.lock:
+            pass
             if not self.positions:
+                pass
                 return None
                 
             # Find closest position within tolerance
@@ -8991,6 +8875,7 @@ class CircularBuffer:
                     closest_diff = diff
                     
             if closest_pos is not None:
+                pass
                 try:
                     index = list(self.positions).index(closest_pos)
                     self.hits += 1
@@ -9051,6 +8936,7 @@ class AudioCircularBuffer:
     def put_samples(self, samples, start_time):
         """Add audio samples with timestamp"""
         with self.lock:
+            pass
             for i, sample in enumerate(samples):
                 timestamp = start_time + (i / self.sample_rate)
                 self.buffer.append(sample)
@@ -9059,14 +8945,18 @@ class AudioCircularBuffer:
     def get_samples(self, start_time, duration):
         """Get audio samples for specific time range"""
         with self.lock:
+            pass
             if not self.timestamps:
+                pass
                 return []
                 
             end_time = start_time + duration
             samples = []
             
             for i, timestamp in enumerate(self.timestamps):
+                pass
                 if start_time <= timestamp <= end_time:
+                    pass
                     if i < len(self.buffer):
                         samples.append(self.buffer[i])
                         
@@ -9164,10 +9054,8 @@ class VideoPlaybackThread(QThread):
                 video_clip = mp.VideoFileClip(self.video_path)
                 self.actual_duration = video_clip.duration
                 video_clip.close()
-                print(f"Video thread using exact duration: {self.actual_duration:.6f}s")
             except:
                 self.actual_duration = self.frame_count / self.fps if self.fps > 0 else 0
-                print(f"Fallback duration calculation: {self.actual_duration:.6f}s")
             
             # Calculate frame duration based on actual duration instead of FPS
             if self.frame_count > 0 and self.actual_duration > 0:
@@ -9175,8 +9063,6 @@ class VideoPlaybackThread(QThread):
             else:
                 self.frame_duration = 1.0 / self.fps
                 
-            print(f"Video initialized: detected {detected_fps} FPS, using {self.fps} FPS, {self.frame_count} frames, exact duration: {self.actual_duration:.6f}s, frame duration: {self.frame_duration:.6f}s")
-            print(f"✓ Video preview will use framerate: {self.fps} FPS (minimum 30 FPS enforced)")
             
             # Initialize audio
             self.initialize_audio()
@@ -9213,7 +9099,6 @@ class VideoPlaybackThread(QThread):
                 # Verify audio duration for synchronization
                 extracted_audio_duration = video_clip.audio.duration
                 video_duration = video_clip.duration
-                print(f"Audio sync verification: video={video_duration:.6f}s, audio={extracted_audio_duration:.6f}s")
                 
                 # Store the verified duration
                 self.verified_audio_duration = extracted_audio_duration
@@ -9222,7 +9107,7 @@ class VideoPlaybackThread(QThread):
                 if self.duration_difference > 0.1:
                     print(f"WARNING: Audio-video duration mismatch: {self.duration_difference:.3f}s difference")
                 else:
-                    print(f"✓ Audio-video duration sync verified (difference: {self.duration_difference:.3f}s)")
+                    pass
                 
                 video_clip.close()
                 
@@ -9230,9 +9115,8 @@ class VideoPlaybackThread(QThread):
                 pygame.mixer.music.load(self.temp_audio_file.name)
                 self.audio_loaded = True
                 self.preview_audio_segments = []  # Will store segmented audio for preview
-                print("Audio loaded successfully for preview (optimized)")
             else:
-                print("No audio track found in video")
+                pass
                 
         except Exception as e:
             print(f"Audio initialization failed: {e}")
@@ -9258,16 +9142,12 @@ class VideoPlaybackThread(QThread):
             current_time = time.time()
             self.playback_start_time = current_time - preview_position
             
-            print(f"🎵 PREVIEW PLAYBACK START:")
-            print(f"  Original position: {original_position:.6f}s")
-            print(f"  Preview position: {preview_position:.6f}s")
-            print(f"  Preview duration: {self.preview_duration:.6f}s")
             
             if self.audio_loaded:
+                pass
                 try:
                     # Play preview audio from the correct preview position
                     pygame.mixer.music.play(start=preview_position)
-                    print(f"✓ Preview audio started at {preview_position:.6f}s")
                 except Exception as e:
                     print(f"Error starting preview audio: {e}")
         else:
@@ -9300,15 +9180,12 @@ class VideoPlaybackThread(QThread):
             self.playback_start_time = current_time - current_position
             
             if self.audio_loaded:
+                pass
                 try:
                     # Enhanced audio start with synchronization verification
                     pygame.mixer.music.play(start=audio_position)
                     
                     # Log detailed playback synchronization info
-                    print(f"🎵 NORMAL PLAYBACK START:")
-                    print(f"  Video position: {current_position:.6f}s")
-                    print(f"  Audio position: {audio_position:.6f}s") 
-                    print(f"  Current frame: {self.current_frame}")
                     
                 except Exception as e:
                     print(f"Error starting audio: {e}")
@@ -9325,6 +9202,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.pause()
             except:
@@ -9357,10 +9235,10 @@ class VideoPlaybackThread(QThread):
         
         # Restart audio from new position if playing
         if self.audio_loaded and self.is_playing:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.music.play(start=precise_audio_position)
-                print(f"Seeked to frame {frame_number}, precise audio position: {precise_audio_position:.3f}s (ratio: {frame_ratio:.4f})")
                 
                 # Immediately update playback timing to compensate for pygame seeking inaccuracy
                 # We calculate the offset from expected position
@@ -9372,7 +9250,6 @@ class VideoPlaybackThread(QThread):
         else:
             # If not playing, still reset timing for when playback starts
             self.playback_start_time = current_time
-            print(f"Seeked to frame {frame_number} (paused), position: {precise_audio_position:.3f}s")
             
         self.mutex.unlock()
         
@@ -9411,23 +9288,17 @@ class VideoPlaybackThread(QThread):
             
             # Seek preview audio
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=target_time_seconds)  # Use preview timeline
                     
-                    print(f"🎵 PREVIEW SEEK:")
-                    print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                    print(f"  Original video time: {original_time:.6f}s")
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking preview audio: {e}")
             else:
-                print(f"🎵 PREVIEW SEEK (paused):")
-                print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                print(f"  Original video time: {original_time:.6f}s")
-                print(f"  Video frame: {target_frame}")
+                pass
         else:
             # Normal mode: use original timeline
             # Validate target time
@@ -9455,6 +9326,7 @@ class VideoPlaybackThread(QThread):
             
             # Verify audio position against timeline duration for perfect sync
             if hasattr(self, 'verified_audio_duration') and self.verified_audio_duration > 0:
+                pass
                 if exact_timeline_position > self.verified_audio_duration:
                     exact_timeline_position = self.verified_audio_duration
             
@@ -9465,23 +9337,17 @@ class VideoPlaybackThread(QThread):
             
             # Enhanced audio seeking with EXACT timeline position
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=exact_timeline_position)
                     
-                    print(f"🎵 NORMAL SEEK:")
-                    print(f"  Timeline position: {target_time_seconds:.6f}s")
-                    print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking audio: {e}")
             else:
-                print(f"🎵 NORMAL SEEK (paused):")
-                print(f"  Timeline position: {target_time_seconds:.6f}s")
-                print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                print(f"  Video frame: {target_frame}")
+                pass
         
         self.mutex.unlock()
         
@@ -9492,6 +9358,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
             except:
@@ -9501,6 +9368,7 @@ class VideoPlaybackThread(QThread):
     def run(self):
         """Main thread loop with optimized performance for preview mode"""
         if not self.initialize_video():
+            pass
             return
             
         # Use original video framerate for accurate playback
@@ -9555,6 +9423,7 @@ class VideoPlaybackThread(QThread):
                     self.mutex.unlock()
                     
                     if self.audio_loaded:
+                        pass
                         try:
                             pygame.mixer.music.stop()
                         except:
@@ -9570,11 +9439,11 @@ class VideoPlaybackThread(QThread):
                         self.mutex.unlock()
                         
                         if self.audio_loaded:
+                            pass
                             try:
                                 pygame.mixer.music.stop()
                             except:
                                 pass
-                        print("✓ Preview playback completed - reached end of segments")
                 
                 # Always process frames to maintain original framerate
                 should_process_frame = True
@@ -9598,7 +9467,6 @@ class VideoPlaybackThread(QThread):
                             if not hasattr(self, '_last_seek_debug') or time.time() - self._last_seek_debug > 1.0:
                                 self._last_seek_debug = time.time()
                                 elapsed_time = time.time() - current_playback_start
-                                print(f"🎬 VIDEO SEEK: preview_time={elapsed_time:.2f}s → seeking to frame {self.current_frame}")
                         elif seek_frame >= 0:
                             # Normal seeking behavior
                             self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
@@ -9655,6 +9523,7 @@ class VideoPlaybackThread(QThread):
         if hasattr(self, 'cap'):
             self.cap.release()
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.quit()
@@ -9697,7 +9566,6 @@ import queue
 try:
     from features import ManualCuttingManager, ManualCuttingIntegration
     MANUAL_CUTTING_AVAILABLE = True
-    print("✅ Manual cutting feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Manual cutting feature not available: {e}")
     MANUAL_CUTTING_AVAILABLE = False
@@ -9706,7 +9574,6 @@ except ImportError as e:
 try:
     from features.batch_processing import BatchProcessingIntegration
     BATCH_PROCESSING_AVAILABLE = True
-    print("✅ Batch processing feature loaded successfully")
 except ImportError as e:
     print(f"⚠️  Batch processing feature not available: {e}")
     BATCH_PROCESSING_AVAILABLE = False
@@ -9715,7 +9582,6 @@ except ImportError as e:
 try:
     from features.resolution_optimizer import ResolutionOptimizer, ResolutionAwareProcessingMixin
     RESOLUTION_OPTIMIZER_AVAILABLE = True
-    print("✅ Resolution optimizer loaded successfully")
 except ImportError as e:
     print(f"⚠️  Resolution optimizer not available: {e}")
     RESOLUTION_OPTIMIZER_AVAILABLE = False
@@ -9726,7 +9592,6 @@ try:
         detect_repeated_words, apply_repeated_word_removal
     )
     TRANSCRIPT_INTEGRATION_AVAILABLE = True
-    print("✅ Transcript integration loaded successfully")
 except ImportError as e:
     print(f"⚠️  Transcript integration not available: {e}")
     TRANSCRIPT_INTEGRATION_AVAILABLE = False
@@ -9765,6 +9630,7 @@ class CircularBuffer:
     def get(self, position):
         """Get item at specific position, returns None if not found"""
         with self.lock:
+            pass
             try:
                 index = list(self.positions).index(position)
                 self.hits += 1
@@ -9776,7 +9642,9 @@ class CircularBuffer:
     def get_nearest(self, position, tolerance=5):
         """Get nearest item within tolerance range"""
         with self.lock:
+            pass
             if not self.positions:
+                pass
                 return None
                 
             # Find closest position within tolerance
@@ -9790,6 +9658,7 @@ class CircularBuffer:
                     closest_diff = diff
                     
             if closest_pos is not None:
+                pass
                 try:
                     index = list(self.positions).index(closest_pos)
                     self.hits += 1
@@ -9850,6 +9719,7 @@ class AudioCircularBuffer:
     def put_samples(self, samples, start_time):
         """Add audio samples with timestamp"""
         with self.lock:
+            pass
             for i, sample in enumerate(samples):
                 timestamp = start_time + (i / self.sample_rate)
                 self.buffer.append(sample)
@@ -9858,14 +9728,18 @@ class AudioCircularBuffer:
     def get_samples(self, start_time, duration):
         """Get audio samples for specific time range"""
         with self.lock:
+            pass
             if not self.timestamps:
+                pass
                 return []
                 
             end_time = start_time + duration
             samples = []
             
             for i, timestamp in enumerate(self.timestamps):
+                pass
                 if start_time <= timestamp <= end_time:
+                    pass
                     if i < len(self.buffer):
                         samples.append(self.buffer[i])
                         
@@ -9963,10 +9837,8 @@ class VideoPlaybackThread(QThread):
                 video_clip = mp.VideoFileClip(self.video_path)
                 self.actual_duration = video_clip.duration
                 video_clip.close()
-                print(f"Video thread using exact duration: {self.actual_duration:.6f}s")
             except:
                 self.actual_duration = self.frame_count / self.fps if self.fps > 0 else 0
-                print(f"Fallback duration calculation: {self.actual_duration:.6f}s")
             
             # Calculate frame duration based on actual duration instead of FPS
             if self.frame_count > 0 and self.actual_duration > 0:
@@ -9974,8 +9846,6 @@ class VideoPlaybackThread(QThread):
             else:
                 self.frame_duration = 1.0 / self.fps
                 
-            print(f"Video initialized: detected {detected_fps} FPS, using {self.fps} FPS, {self.frame_count} frames, exact duration: {self.actual_duration:.6f}s, frame duration: {self.frame_duration:.6f}s")
-            print(f"✓ Video preview will use framerate: {self.fps} FPS (minimum 30 FPS enforced)")
             
             # Initialize audio
             self.initialize_audio()
@@ -10012,7 +9882,6 @@ class VideoPlaybackThread(QThread):
                 # Verify audio duration for synchronization
                 extracted_audio_duration = video_clip.audio.duration
                 video_duration = video_clip.duration
-                print(f"Audio sync verification: video={video_duration:.6f}s, audio={extracted_audio_duration:.6f}s")
                 
                 # Store the verified duration
                 self.verified_audio_duration = extracted_audio_duration
@@ -10021,7 +9890,7 @@ class VideoPlaybackThread(QThread):
                 if self.duration_difference > 0.1:
                     print(f"WARNING: Audio-video duration mismatch: {self.duration_difference:.3f}s difference")
                 else:
-                    print(f"✓ Audio-video duration sync verified (difference: {self.duration_difference:.3f}s)")
+                    pass
                 
                 video_clip.close()
                 
@@ -10029,9 +9898,8 @@ class VideoPlaybackThread(QThread):
                 pygame.mixer.music.load(self.temp_audio_file.name)
                 self.audio_loaded = True
                 self.preview_audio_segments = []  # Will store segmented audio for preview
-                print("Audio loaded successfully for preview (optimized)")
             else:
-                print("No audio track found in video")
+                pass
                 
         except Exception as e:
             print(f"Audio initialization failed: {e}")
@@ -10057,16 +9925,12 @@ class VideoPlaybackThread(QThread):
             current_time = time.time()
             self.playback_start_time = current_time - preview_position
             
-            print(f"🎵 PREVIEW PLAYBACK START:")
-            print(f"  Original position: {original_position:.6f}s")
-            print(f"  Preview position: {preview_position:.6f}s")
-            print(f"  Preview duration: {self.preview_duration:.6f}s")
             
             if self.audio_loaded:
+                pass
                 try:
                     # Play preview audio from the correct preview position
                     pygame.mixer.music.play(start=preview_position)
-                    print(f"✓ Preview audio started at {preview_position:.6f}s")
                 except Exception as e:
                     print(f"Error starting preview audio: {e}")
         else:
@@ -10099,15 +9963,12 @@ class VideoPlaybackThread(QThread):
             self.playback_start_time = current_time - current_position
             
             if self.audio_loaded:
+                pass
                 try:
                     # Enhanced audio start with synchronization verification
                     pygame.mixer.music.play(start=audio_position)
                     
                     # Log detailed playback synchronization info
-                    print(f"🎵 NORMAL PLAYBACK START:")
-                    print(f"  Video position: {current_position:.6f}s")
-                    print(f"  Audio position: {audio_position:.6f}s") 
-                    print(f"  Current frame: {self.current_frame}")
                     
                 except Exception as e:
                     print(f"Error starting audio: {e}")
@@ -10124,6 +9985,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.pause()
             except:
@@ -10156,10 +10018,10 @@ class VideoPlaybackThread(QThread):
         
         # Restart audio from new position if playing
         if self.audio_loaded and self.is_playing:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.music.play(start=precise_audio_position)
-                print(f"Seeked to frame {frame_number}, precise audio position: {precise_audio_position:.3f}s (ratio: {frame_ratio:.4f})")
                 
                 # Immediately update playback timing to compensate for pygame seeking inaccuracy
                 # We calculate the offset from expected position
@@ -10171,7 +10033,6 @@ class VideoPlaybackThread(QThread):
         else:
             # If not playing, still reset timing for when playback starts
             self.playback_start_time = current_time
-            print(f"Seeked to frame {frame_number} (paused), position: {precise_audio_position:.3f}s")
             
         self.mutex.unlock()
         
@@ -10210,23 +10071,17 @@ class VideoPlaybackThread(QThread):
             
             # Seek preview audio
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=target_time_seconds)  # Use preview timeline
                     
-                    print(f"🎵 PREVIEW SEEK:")
-                    print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                    print(f"  Original video time: {original_time:.6f}s")
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking preview audio: {e}")
             else:
-                print(f"🎵 PREVIEW SEEK (paused):")
-                print(f"  Preview timeline: {target_time_seconds:.6f}s")
-                print(f"  Original video time: {original_time:.6f}s")
-                print(f"  Video frame: {target_frame}")
+                pass
         else:
             # Normal mode: use original timeline
             # Validate target time
@@ -10254,6 +10109,7 @@ class VideoPlaybackThread(QThread):
             
             # Verify audio position against timeline duration for perfect sync
             if hasattr(self, 'verified_audio_duration') and self.verified_audio_duration > 0:
+                pass
                 if exact_timeline_position > self.verified_audio_duration:
                     exact_timeline_position = self.verified_audio_duration
             
@@ -10264,23 +10120,17 @@ class VideoPlaybackThread(QThread):
             
             # Enhanced audio seeking with EXACT timeline position
             if self.audio_loaded and self.is_playing:
+                pass
                 try:
                     pygame.mixer.music.stop()
                     time.sleep(0.001)
                     pygame.mixer.music.play(start=exact_timeline_position)
                     
-                    print(f"🎵 NORMAL SEEK:")
-                    print(f"  Timeline position: {target_time_seconds:.6f}s")
-                    print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                    print(f"  Video frame: {target_frame}")
                     
                 except Exception as e:
                     print(f"Error seeking audio: {e}")
             else:
-                print(f"🎵 NORMAL SEEK (paused):")
-                print(f"  Timeline position: {target_time_seconds:.6f}s")
-                print(f"  Audio position: {exact_timeline_position:.6f}s") 
-                print(f"  Video frame: {target_frame}")
+                pass
         
         self.mutex.unlock()
         
@@ -10291,6 +10141,7 @@ class VideoPlaybackThread(QThread):
         self.is_playing = False
         self.playback_started = False  # Reset playback tracking
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
             except:
@@ -10300,6 +10151,7 @@ class VideoPlaybackThread(QThread):
     def run(self):
         """Main thread loop with optimized performance for preview mode"""
         if not self.initialize_video():
+            pass
             return
             
         # Use original video framerate for accurate playback
@@ -10354,6 +10206,7 @@ class VideoPlaybackThread(QThread):
                     self.mutex.unlock()
                     
                     if self.audio_loaded:
+                        pass
                         try:
                             pygame.mixer.music.stop()
                         except:
@@ -10369,11 +10222,11 @@ class VideoPlaybackThread(QThread):
                         self.mutex.unlock()
                         
                         if self.audio_loaded:
+                            pass
                             try:
                                 pygame.mixer.music.stop()
                             except:
                                 pass
-                        print("✓ Preview playback completed - reached end of segments")
                 
                 # Always process frames to maintain original framerate
                 should_process_frame = True
@@ -10397,7 +10250,6 @@ class VideoPlaybackThread(QThread):
                             if not hasattr(self, '_last_seek_debug') or time.time() - self._last_seek_debug > 1.0:
                                 self._last_seek_debug = time.time()
                                 elapsed_time = time.time() - current_playback_start
-                                print(f"🎬 VIDEO SEEK: preview_time={elapsed_time:.2f}s → seeking to frame {self.current_frame}")
                         elif seek_frame >= 0:
                             # Normal seeking behavior
                             self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame)
@@ -10454,6 +10306,7 @@ class VideoPlaybackThread(QThread):
         if hasattr(self, 'cap'):
             self.cap.release()
         if self.audio_loaded:
+            pass
             try:
                 pygame.mixer.music.stop()
                 pygame.mixer.quit()
@@ -10469,6 +10322,7 @@ class VideoPlaybackThread(QThread):
     def handle_preview_playback_optimized(self, elapsed_time, initial_frame):
         """Optimized preview playback with cached calculations"""
         if not self.preview_segments:
+            pass
             return initial_frame
             
         # Cache segment lookup for performance
@@ -10496,7 +10350,6 @@ class VideoPlaybackThread(QThread):
                     # Debug output to show frame skipping (only occasionally to avoid spam)
                     if not hasattr(self, '_last_debug_time') or elapsed_time - self._last_debug_time > 2.0:
                         self._last_debug_time = elapsed_time
-                        print(f"🎬 PREVIEW FRAME SKIP: preview_time={elapsed_time:.2f}s → original_time={target_original_time:.2f}s → frame={self._cached_target_frame}")
                     
                     break
                     
@@ -10550,6 +10403,7 @@ class VideoPlaybackThread(QThread):
             pixmap = QPixmap.fromImage(qt_image)
             return pixmap
         except:
+            pass
             return None
             
     def process_frame_ultra_fast(self, frame):
@@ -10593,23 +10447,28 @@ class VideoPlaybackThread(QThread):
             pixmap = QPixmap.fromImage(qt_image)
             return pixmap
         except:
+            pass
             return None
             
     def prefetch_frames(self, current_frame):
         """Prefetch nearby frames for smoother playback - lightweight version"""
         if not self.buffer_enabled or not self.prefetch_enabled:
+            pass
             return
             
         # Only prefetch 2-3 frames ahead to minimize performance impact
         def prefetch_worker():
             try:
+                pass
                 for offset in range(1, min(self.prefetch_range, 3)):  # Only 2-3 frames ahead
                     target_frame = current_frame + offset
                     if target_frame >= self.frame_count:
+                        pass
                         break
                         
                     # Check if frame is already in buffer
                     if self.frame_buffer.get(target_frame) is not None:
+                        pass
                         continue
                         
                     # Use existing video capture instead of creating new one
@@ -10638,7 +10497,6 @@ class VideoPlaybackThread(QThread):
     def enable_prefetch(self):
         """Enable prefetch after initial loading is complete"""
         self.prefetch_enabled = True
-        print("🚀 Frame prefetching enabled for smoother playback")
         
     def disable_prefetch(self):
         """Disable prefetch during heavy operations"""
@@ -10666,11 +10524,10 @@ class VideoPlaybackThread(QThread):
                 # Load the preview audio into pygame
                 try:
                     pygame.mixer.music.load(self.temp_preview_audio_file.name)
-                    print("✓ Preview audio loaded successfully - silent parts will be skipped during playback")
                 except Exception as e:
                     print(f"Error loading preview audio: {e}")
             else:
-                print("Failed to create preview audio - using original audio")
+                pass
         else:
             self.silent_parts = []
             self.preview_segments = []
@@ -10678,9 +10535,9 @@ class VideoPlaybackThread(QThread):
             
             # Restore original audio
             if self.audio_loaded and hasattr(self, 'temp_audio_file'):
+                pass
                 try:
                     pygame.mixer.music.load(self.temp_audio_file.name)
-                    print("✓ Original audio restored")
                 except Exception as e:
                     print(f"Error restoring original audio: {e}")
         self.mutex.unlock()
@@ -10688,6 +10545,7 @@ class VideoPlaybackThread(QThread):
     def get_effective_duration(self):
         """Get the effective timeline duration (preview duration in preview mode, original otherwise)"""
         if self.preview_mode and hasattr(self, 'preview_timeline_duration') and self.preview_timeline_duration is not None:
+            pass
             return self.preview_timeline_duration
         return self.duration_seconds
         
@@ -10699,11 +10557,13 @@ class VideoPlaybackThread(QThread):
             
         # Preview mode: convert preview timeline position to original timeline position
         if not self.silent_parts:
+            pass
             return click_time_seconds
             
         # Get selected silent parts (ones that will be cut)
         selected_silent_parts = [part for part in self.silent_parts if part['selected']]
         if not selected_silent_parts:
+            pass
             return click_time_seconds
             
         # Sort by start time
@@ -10714,6 +10574,7 @@ class VideoPlaybackThread(QThread):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 preview_segments.append((last_end, silent_part['start']))
@@ -10725,6 +10586,7 @@ class VideoPlaybackThread(QThread):
             
         # Convert preview timeline position to original time
         if click_time_seconds <= 0:
+            pass
             return preview_segments[0][0] if preview_segments else 0
             
         accumulated_time = 0
@@ -10734,10 +10596,6 @@ class VideoPlaybackThread(QThread):
                 # The position is within this segment
                 offset_in_segment = click_time_seconds - accumulated_time
                 original_time = start + offset_in_segment
-                print(f"🎯 TIMELINE CLICK CONVERSION:")
-                print(f"  Preview click: {click_time_seconds:.3f}s")
-                print(f"  Original time: {original_time:.3f}s")
-                print(f"  Segment: {start:.3f}s - {end:.3f}s")
                 return original_time
             accumulated_time += segment_duration
             
@@ -10766,6 +10624,7 @@ class VideoPlaybackThread(QThread):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 self.preview_segments.append((last_end, silent_part['start']))
@@ -10778,16 +10637,17 @@ class VideoPlaybackThread(QThread):
         # Calculate total preview duration correctly
         self.preview_duration = sum(end - start for start, end in self.preview_segments)
         
-        print(f"Preview segments calculated: {len(self.preview_segments)} segments, duration: {self.preview_duration:.3f}s")
         for i, (start, end) in enumerate(self.preview_segments):
             print(f"  Segment {i+1}: {start:.3f}s - {end:.3f}s (duration: {end-start:.3f}s)")
         
     def preview_time_to_original_time(self, preview_time):
         """Convert preview timeline position to original video time"""
         if not self.preview_mode or not self.preview_segments:
+            pass
             return preview_time
             
         if preview_time <= 0:
+            pass
             return self.preview_segments[0][0] if self.preview_segments else 0
             
         accumulated_time = 0
@@ -10805,10 +10665,12 @@ class VideoPlaybackThread(QThread):
     def original_time_to_preview_time(self, original_time):
         """Convert original video time to preview timeline position"""
         if not self.preview_mode or not self.preview_segments:
+            pass
             return original_time
             
         accumulated_preview_time = 0
         for start, end in self.preview_segments:
+            pass
             if start <= original_time <= end:
                 # The time is within this segment
                 offset_in_segment = original_time - start
@@ -10826,6 +10688,7 @@ class VideoPlaybackThread(QThread):
     def create_preview_audio(self):
         """Create segmented audio file for preview mode that skips silent parts"""
         if not self.preview_segments or not self.audio_loaded:
+            pass
             return False
             
         try:
@@ -10833,7 +10696,6 @@ class VideoPlaybackThread(QThread):
             import moviepy.editor as mp
             from pydub import AudioSegment
             
-            print("Creating preview audio with silent parts removed...")
             
             # Load the original audio
             original_audio = AudioSegment.from_file(self.temp_audio_file.name)
@@ -10847,7 +10709,6 @@ class VideoPlaybackThread(QThread):
                 # Extract segment
                 segment = original_audio[start_ms:end_ms]
                 preview_audio_segments.append(segment)
-                print(f"  Added segment: {start_time:.2f}s - {end_time:.2f}s (duration: {(end_time-start_time):.2f}s)")
             
             # Concatenate all segments
             if preview_audio_segments:
@@ -10859,12 +10720,10 @@ class VideoPlaybackThread(QThread):
                 
                 preview_audio.export(self.temp_preview_audio_file.name, format="wav")
                 
-                print(f"Preview audio created: {len(preview_audio_segments)} segments, total duration: {len(preview_audio)/1000:.2f}s")
-                print(f"Preview audio saved to: {self.temp_preview_audio_file.name}")
                 
                 return True
             else:
-                print("No preview segments to create audio from")
+                pass
                 return False
                 
         except Exception as e:
@@ -10884,7 +10743,7 @@ class WaveformLoadingThread(QThread):
     def run(self):
         """Load waveform data in background"""
         try:
-            print("🌊 Loading waveform in background...")
+            pass
             
             # Check if this is an audio-only file
             audio_extensions = {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a'}
@@ -10892,7 +10751,6 @@ class WaveformLoadingThread(QThread):
             is_audio_only = file_ext in audio_extensions
             
             if is_audio_only:
-                print(f"🎵 Loading audio-only file: {self.video_path}")
                 self.progress_updated.emit("Loading audio file...")
                 
                 # Load audio directly using pydub
@@ -10902,7 +10760,6 @@ class WaveformLoadingThread(QThread):
                 # Emit duration immediately for instant timeline setup
                 duration_seconds = len(audio) / 1000.0
                 self.duration_loaded.emit(duration_seconds)
-                print(f"🎵 Audio duration: {duration_seconds:.2f} seconds")
                 
                 self.progress_updated.emit("Processing audio data...")
                 
@@ -10939,7 +10796,6 @@ class WaveformLoadingThread(QThread):
                 max_amplitude = max(abs(s) for s in samples) if samples else 1.0
                 
                 self.progress_updated.emit("Audio waveform ready!")
-                print(f"🎵 Audio waveform generated: {len(samples)} samples, max amplitude: {max_amplitude:.3f}")
                 
                 # Emit the loaded waveform data
                 self.waveform_loaded.emit(samples, max_amplitude)
@@ -10947,7 +10803,6 @@ class WaveformLoadingThread(QThread):
                 
             else:
                 # Handle video files
-                print(f"🎬 Loading video file: {self.video_path}")
                 self.progress_updated.emit("Loading video file...")
                 
                 # Extract audio using MoviePy
@@ -10961,7 +10816,6 @@ class WaveformLoadingThread(QThread):
                 self.progress_updated.emit("Extracting audio track...")
                 
                 if video.audio is None:
-                    print("No audio track found in video")
                     self.waveform_loaded.emit(None, 0)
                     video.close()
                     return
@@ -11060,6 +10914,7 @@ class SilenceDetectionThread(QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -11072,7 +10927,9 @@ class SilenceDetectionThread(QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -11082,9 +10939,6 @@ class SilenceDetectionThread(QThread):
         try:
             # Use the accurate pydub-based detection for better results
             # Skip fast FFmpeg detection to maintain accuracy
-            print(f"\n---------- ACCURATE SILENCE DETECTION START ----------")
-            print(f"Using pydub for accurate silence detection")
-            print(f"Detecting silence with threshold: {self.silence_threshold} dB, min duration: {self.min_silence_duration} ms, padding: {self.padding_ms} ms")
             
             # Start with initial progress
             self.progress_updated.emit(5)
@@ -11096,15 +10950,12 @@ class SilenceDetectionThread(QThread):
             is_audio_only = file_ext in audio_extensions
             
             if is_audio_only:
-                print(f"Detected audio-only file: {self.video_path}")
                 self.progress_updated.emit(10)
                 QApplication.processEvents()
                 
                 # For audio files, load directly with pydub
-                print(f"Loading audio directly from: {self.video_path}")
                 audio = AudioSegment.from_file(self.video_path)
                 audio_duration_ms = len(audio)
-                print(f"Audio loaded directly: duration={audio_duration_ms}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
                 self.progress_updated.emit(40)
                 QApplication.processEvents()
                 
@@ -11122,14 +10973,12 @@ class SilenceDetectionThread(QThread):
                 change_settings({"FFMPEG_BINARY": self.ffmpeg_path})
                 
                 # Extract audio from video more efficiently
-                print(f"Loading video from: {self.video_path}")
                 self.progress_updated.emit(10)
                 QApplication.processEvents()
                 
                 # Load video more efficiently
                 video = mp.VideoFileClip(self.video_path)
                 audio_duration_ms = int(video.audio.duration * 1000)
-                print(f"Video loaded, audio duration: {audio_duration_ms} ms")
                 self.progress_updated.emit(20)
                 QApplication.processEvents()
                 
@@ -11137,7 +10986,6 @@ class SilenceDetectionThread(QThread):
                 temp_audio = tempfile.NamedTemporaryFile(suffix=f'_sid_{os.getpid()}_{int(time.time())}.wav', delete=False)
                 temp_audio_path = temp_audio.name
                 temp_audio.close()
-                print(f"Extracting audio to: {temp_audio_path}")
                 
                 self.progress_updated.emit(30)
                 QApplication.processEvents()
@@ -11150,14 +10998,11 @@ class SilenceDetectionThread(QThread):
                     codec='pcm_s16le',  # Fast codec
                     ffmpeg_params=['-ar', '22050']  # Lower sample rate for faster processing
                 )
-                print(f"Audio extracted successfully")
                 self.progress_updated.emit(50)
                 QApplication.processEvents()
                 
                 # Load audio and detect non-silent parts with optimized settings
-                print(f"Loading audio for accurate silence detection")
                 audio = AudioSegment.from_file(temp_audio_path)
-                print(f"Audio loaded: duration={len(audio)}ms, channels={audio.channels}, sample_width={audio.sample_width}, frame_rate={audio.frame_rate}")
                 self.progress_updated.emit(60)
                 QApplication.processEvents()
                 
@@ -11166,7 +11011,6 @@ class SilenceDetectionThread(QThread):
                     audio = audio.set_channels(1)
             
             # Detect non-silent parts with optimized parameters
-            print(f"Detecting non-silent parts with silence threshold={self.silence_threshold}dB, min_silence_len={self.min_silence_duration}ms")
             non_silent_ranges = detect_nonsilent(
                 audio,
                 min_silence_len=self.min_silence_duration,
@@ -11176,8 +11020,8 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(70)
             QApplication.processEvents()
             
-            print(f"Number of non-silent ranges detected: {len(non_silent_ranges)}")
             if non_silent_ranges:
+                pass
                 for i, (start, end) in enumerate(non_silent_ranges[:5]):  # Show first 5
                     print(f"  Non-silent range {i+1}: {start}ms - {end}ms (duration: {end-start}ms)")
                 if len(non_silent_ranges) > 5:
@@ -11198,6 +11042,7 @@ class SilenceDetectionThread(QThread):
                 current_start, current_end = padded_ranges[0]
                 
                 for start, end in padded_ranges[1:]:
+                    pass
                     if start <= current_end:  # Overlap found
                         # Extend current range
                         current_end = max(current_end, end)
@@ -11209,7 +11054,6 @@ class SilenceDetectionThread(QThread):
                 # Add the last range
                 merged_ranges.append((current_start, current_end))
                 
-                print(f"After padding ({self.padding_ms}ms) and merging: {len(merged_ranges)} non-silent ranges")
                 non_silent_ranges = merged_ranges
             
             # Convert non-silent ranges to silent ranges
@@ -11218,7 +11062,6 @@ class SilenceDetectionThread(QThread):
             if len(non_silent_ranges) == 0:
                 # If no non-silent parts detected, the whole audio is silence
                 silent_ranges = [(0, audio_duration_ms)]
-                print(f"No non-silent parts detected, treating the entire audio as silence")
             else:
                 # Add silent range at the beginning if the first non-silent part doesn't start at 0
                 if non_silent_ranges[0][0] > 0:
@@ -11235,8 +11078,8 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(80)
             QApplication.processEvents()
             
-            print(f"Number of initial silent ranges: {len(silent_ranges)}")
             if silent_ranges:
+                pass
                 for i, (start, end) in enumerate(silent_ranges[:5]):  # Show first 5
                     print(f"  Silent range {i+1}: {start}ms - {end}ms (duration: {end-start}ms)")
                 if len(silent_ranges) > 5:
@@ -11244,7 +11087,6 @@ class SilenceDetectionThread(QThread):
             
             # Filter out silent ranges shorter than the minimum duration
             filtered_silent_ranges = [(start, end) for start, end in silent_ranges if end - start >= self.min_silence_duration]
-            print(f"After filtering by minimum duration ({self.min_silence_duration}ms): {len(filtered_silent_ranges)} silent ranges")
             
             self.progress_updated.emit(90)
             QApplication.processEvents()
@@ -11267,6 +11109,7 @@ class SilenceDetectionThread(QThread):
             
             # Clean up temp file (only for video files)
             if not is_audio_only:
+                pass
                 try:
                     os.unlink(temp_audio_path)
                 except:
@@ -11283,8 +11126,6 @@ class SilenceDetectionThread(QThread):
             QApplication.processEvents()
             
             # Emit results
-            print(f"Final silent parts count: {len(silent_parts)}")
-            print(f"---------- ACCURATE SILENCE DETECTION END ----------\n")
             self.detection_complete.emit(silent_parts)
             
         except Exception as e:
@@ -11296,8 +11137,7 @@ class SilenceDetectionThread(QThread):
     def run_fast_ffmpeg_detection(self):
         """Fast silence detection using FFmpeg's silencedetect filter - much faster than pydub"""
         try:
-            print(f"\n---------- FAST SILENCE DETECTION START ----------")
-            print(f"Using FFmpeg silencedetect filter for maximum speed")
+            pass
             
             # Progress update
             self.progress_updated.emit(10)
@@ -11319,7 +11159,6 @@ class SilenceDetectionThread(QThread):
             QApplication.processEvents()
             
             # Run FFmpeg and capture output
-            print(f"Running fast FFmpeg silence detection...")
             result = subprocess.run(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -11338,13 +11177,16 @@ class SilenceDetectionThread(QThread):
             
             # Parse FFmpeg output for silence detection
             for line in result.stderr.split('\n'):
+                pass
                 if 'silence_start:' in line:
+                    pass
                     try:
                         start_time = float(line.split('silence_start:')[1].strip())
                         silence_starts.append(start_time)
                     except:
                         pass
                 elif 'silence_end:' in line:
+                    pass
                     try:
                         end_time = float(line.split('silence_end:')[1].split('|')[0].strip())
                         silence_ends.append(end_time)
@@ -11353,6 +11195,7 @@ class SilenceDetectionThread(QThread):
             
             # Create silence parts from starts and ends
             for i, start in enumerate(silence_starts):
+                pass
                 if i < len(silence_ends):
                     end = silence_ends[i]
                     duration_ms = int((end - start) * 1000)
@@ -11381,14 +11224,11 @@ class SilenceDetectionThread(QThread):
             self.progress_updated.emit(100)
             QApplication.processEvents()
             
-            print(f"Fast FFmpeg detection completed: {len(silent_parts)} silent parts found")
-            print(f"---------- FAST SILENCE DETECTION END ----------\n")
             
             return silent_parts
             
         except Exception as e:
             print(f"Fast FFmpeg detection failed: {e}")
-            print("Falling back to slower detection method...")
             return None
 
 class AudioProcessingThread(QThread):
@@ -11413,6 +11253,7 @@ class AudioProcessingThread(QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"
         except Exception:
             pass
@@ -11424,14 +11265,16 @@ class AudioProcessingThread(QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         return "ffmpeg"
     
     def run(self):
         try:
-            print(f"🎵 Processing audio file: {self.audio_path}")
+            pass
             
             # Load audio using pydub
             from pydub import AudioSegment
@@ -11445,6 +11288,7 @@ class AudioProcessingThread(QThread):
             last_end = 0
             
             for part in sorted_parts:
+                pass
                 if part['selected']:  # Only cut if selected
                     if part['start'] > last_end:
                         # Add segment before the silence (convert seconds to milliseconds)
@@ -11497,7 +11341,6 @@ class AudioProcessingThread(QThread):
                 result_audio.export(self.output_path, format="mp3", bitrate="192k")
             
             self.progress_updated.emit(100)
-            print(f"✅ Audio processing completed: {self.output_path}")
             self.processing_complete.emit(self.output_path)
             
         except Exception as e:
@@ -11536,6 +11379,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -11547,7 +11391,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -11560,6 +11406,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
         """
         # Check if file exists
         if not os.path.isfile(video_path):
+            pass
             return False, f"Video file not found: {video_path}"
             
         # Try to get video info using FFmpeg
@@ -11582,9 +11429,12 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             # Check for errors in stderr
             stderr = process.stderr.decode('utf-8', errors='ignore')
             if process.returncode != 0:
+                pass
                 if stderr:
+                    pass
                     return False, f"FFmpeg reported errors: {stderr}"
                 else:
+                    pass
                     return False, "Unknown FFmpeg error when validating video file"
                     
             # If we got here, the file seems valid
@@ -11602,7 +11452,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 return
             
             # Fallback to MoviePy processing with hardware acceleration if FFmpeg failed
-            print("\n---------- FALLBACK TO MOVIEPY WITH HARDWARE ACCELERATION ----------")
             
             # Get the FFmpeg path - try environment or fallback to known location
             ffmpeg_path = self.get_ffmpeg_path()
@@ -11612,17 +11461,14 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 mp.config.change_settings({"FFMPEG_BINARY": ffmpeg_path})
             
             # Validate the video file first
-            print(f"Validating video file: {self.video_path}")
             is_valid, error_message = self.validate_video_file(self.video_path)
             if not is_valid:
-                print(f"Video validation failed: {error_message}")
                 raise RuntimeError(f"Video file validation failed: {error_message}")
             
             # Check if input file exists
             if not os.path.exists(self.video_path):
                 raise FileNotFoundError(f"Video file not found: {self.video_path}")
             
-            print(f"Loading video from: {self.video_path}")
             
             # Initialize VideoFileClip with explicit parameters for better compatibility
             video = None
@@ -11631,11 +11477,8 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 video = mp.VideoFileClip(self.video_path, audio=True, verbose=False)
                 # Test video access to make sure it can be read
                 test_frame = video.get_frame(0)  # Get first frame to test
-                print(f"Video loaded successfully. Duration: {video.duration}s")
             except Exception as initial_error:
-                print(f"Error during standard video loading: {str(initial_error)}")
                 # If standard loading fails, try alternative approach
-                print("Attempting alternative loading method...")
                 try:
                     # We'll try to create a fresh copy of the video to work with
                     temp_video_path = os.path.join(tempfile.gettempdir(), f"temp_video_{int(time.time())}.mp4")
@@ -11651,7 +11494,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                         "-y",  # Overwrite if exists
                         temp_video_path
                     ]
-                    print(f"Running FFmpeg to create a clean copy: {' '.join(cmd)}")
                     result = subprocess.run(
                         cmd,
                         stdout=subprocess.PIPE,
@@ -11661,22 +11503,17 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     if result.returncode != 0:
                         stderr = result.stderr.decode('utf-8', errors='ignore')
-                        print(f"FFmpeg copy failed: {stderr}")
                         raise RuntimeError(f"Failed to create a clean video copy: {stderr}")
                     
                     # Now try to load the clean copy
                     video = mp.VideoFileClip(temp_video_path, audio=True, verbose=False)
                     test_frame = video.get_frame(0)  # Test again
-                    print(f"Successfully loaded video with alternative method. Duration: {video.duration}s")
                     
                     # Update the video path to use the clean copy
-                    print(f"Using temporary video file: {temp_video_path}")
                     self.video_path = temp_video_path
                 except Exception as alt_error:
-                    print(f"Alternative loading method also failed: {str(alt_error)}")
                     raise RuntimeError(f"Could not load video file using any method: {str(initial_error)}\nAlternative method error: {str(alt_error)}")
             
-            print(f"Video loaded, audio duration: {video.audio.duration} ms")
             
             # Process the silent parts to get a list of segments
             sorted_parts = sorted(self.silent_parts, key=lambda x: x['start'])
@@ -11687,6 +11524,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             QApplication.processEvents()
             
             for part in sorted_parts:
+                pass
                 if part['selected']:  # Only cut if selected
                     if part['start'] > last_end:
                         # Add segment before the silence
@@ -11701,6 +11539,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             # Add the final segment if needed
             if last_end < video.duration:
+                pass
                 try:
                     final_segment = video.subclip(last_end, video.duration)
                     segments.append(final_segment)
@@ -11712,9 +11551,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             # If no segments were cut, just use the original video
             if not segments:
-                print("No silent segments were cut, using original video")
                 result = video
             else:
+                pass
                 try:
                     # Concatenate all segments
                     print(f"Concatenating {len(segments)} video segments")
@@ -11722,7 +11561,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 except Exception as e:
                     print(f"Error concatenating clips: {str(e)}")
                     # Fallback to using the original video
-                    print("Fallback to original video")
                     result = video
                     # Clean up segments to avoid memory leaks
                     for segment in segments:
@@ -11746,7 +11584,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 
                 # Check for timeout
                 if elapsed_total > self.processing_timeout:
-                    print(f"MoviePy processing timeout after {self.processing_timeout} seconds")
                     timer.stop()
                     return
                 
@@ -11790,13 +11627,11 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 # Detect hardware acceleration for MoviePy export
                 hw_options = self.detect_hardware_acceleration()
                 video_codec, hw_name = hw_options[0]
-                print(f"MoviePy export using {hw_name}")
                 
                 # Prepare FFmpeg parameters for hardware acceleration
                 # Use resolution-optimized parameters if available
                 if RESOLUTION_OPTIMIZER_AVAILABLE and hasattr(self, 'optimization_settings'):
                     ffmpeg_params = self.get_optimized_ffmpeg_params(video_codec)
-                    print(f"🎯 Using {self.optimization_settings.get('category', 'Unknown')} optimized encoding parameters")
                 else:
                     # Fallback to standard parameters
                     ffmpeg_params = ["-pix_fmt", "yuv420p"]  # Standard pixel format
@@ -11831,7 +11666,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                         ])
                 
                 # Export the result with hardware acceleration
-                print(f"Writing output to: {self.output_path}")
                 result.write_videofile(
                     self.output_path, 
                     codec=video_codec,  # Use detected hardware codec
@@ -11851,10 +11685,8 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     # Get file size for reporting (but don't block on it)
                     try:
                         file_size = os.path.getsize(self.output_path)
-                        print(f"MoviePy processing completed successfully")
-                        print(f"Output file size: {file_size / (1024*1024):.1f} MB")
                     except:
-                        print(f"MoviePy processing completed successfully")
+                        pass
                 else:
                     raise RuntimeError("Output file was not created by MoviePy")
                     
@@ -11865,6 +11697,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             finally:
                 # Clean up resources
                 try:
+                    pass
                     if 'video' in locals():
                         video.close()
                     if 'result' in locals() and result != video:
@@ -11899,7 +11732,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_nvenc', 'NVIDIA NVENC'))
-                print("✓ NVIDIA NVENC hardware acceleration available")
         except:
             pass
             
@@ -11912,7 +11744,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_qsv', 'Intel QuickSync'))
-                print("✓ Intel QuickSync hardware acceleration available")
         except:
             pass
             
@@ -11925,31 +11756,28 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             
             if result.returncode == 0:
                 hw_options.append(('h264_amf', 'AMD AMF'))
-                print("✓ AMD AMF hardware acceleration available")
         except:
             pass
             
         # Fallback to software encoding
         if not hw_options:
             hw_options.append(('libx264', 'Software (CPU)'))
-            print("ℹ Using software encoding (no hardware acceleration detected)")
             
         return hw_options
 
     def run_fast_ffmpeg_processing(self):
         """Fast video processing using direct FFmpeg with hardware acceleration"""
         try:
-            print(f"\n---------- HARDWARE-ACCELERATED FFMPEG PROCESSING START ----------")
+            pass
             
             # Detect available hardware acceleration
             hw_options = self.detect_hardware_acceleration()
             video_codec, hw_name = hw_options[0]  # Use the first (best) available option
-            print(f"Using {hw_name} for video encoding")
             
             # Get selected silent parts
             selected_parts = [part for part in self.silent_parts if part['selected']]
             if not selected_parts:
-                print("No silent parts selected for cutting")
+                pass
                 return self.output_path
             
             # Cache video duration for progress calculation
@@ -11985,7 +11813,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 segment_count += 1
             
             if segment_count == 0:
-                print("No segments to keep after removing silence")
+                pass
                 return ""
             
             self.progress_updated.emit(30)
@@ -12022,7 +11850,6 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 # Remove the pixel format since it's already added above
                 optimized_params = [p for p in optimized_params if p != '-pix_fmt' and p != 'yuv420p']
                 cmd.extend(optimized_params)
-                print(f"🎯 Using {self.optimization_settings.get('category', 'Unknown')} optimized FFmpeg parameters")
             else:
                 # Fallback to standard parameters
                 if video_codec == 'h264_nvenc':
@@ -12065,10 +11892,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
             self.progress_updated.emit(50)
             QApplication.processEvents()
             
-            print(f"Running hardware-accelerated FFmpeg processing with {hw_name}...")
             print(f"Command: {' '.join(cmd[:12])}...")  # Show partial command
-            print(f"Input file: {self.video_path}")
-            print(f"Output file: {self.output_path}")
             print(f"Filter complex: {filter_complex[:100]}...")  # Show first 100 chars
             
             # Run FFmpeg with progress monitoring
@@ -12098,11 +11922,13 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                 while True:
                     line = process.stdout.readline()
                     if not line:
+                        pass
                         break
                     output_lines.append(line.strip())
                     
                     # Parse FFmpeg progress from time= output
                     if "time=" in line:
+                        pass
                         try:
                             # Extract time from FFmpeg output (format: time=00:01:23.45)
                             time_match = line.split("time=")[1].split()[0]
@@ -12126,9 +11952,9 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     # Look for completion indicators
                     if "video:" in line.lower() and "audio:" in line.lower() and "subtitle:" in line.lower():
-                        print(f"FFmpeg completion detected: {line.strip()}")
+                        pass
                     elif "error" in line.lower():
-                        print(f"FFmpeg error detected: {line.strip()}")
+                        pass
             
             # Start output reading thread
             output_thread = threading.Thread(target=read_output, daemon=True)
@@ -12154,6 +11980,7 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     # Look for time information in FFmpeg output
                     if "time=" in latest_output:
+                        pass
                         try:
                             time_match = latest_output.split("time=")[1].split()[0]
                             time_parts = time_match.split(":")
@@ -12233,25 +12060,21 @@ class ProcessingThread(ResolutionAwareProcessingMixin, QThread):
                     
                     elapsed_total = time.time() - start_time
                     if file_size > 0:
-                        print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
-                        print(f"Output file size: {file_size / (1024*1024):.1f} MB")
+                        pass
                     else:
-                        print(f"Hardware-accelerated processing completed in {elapsed_total:.1f} seconds")
-                    print(f"---------- HARDWARE-ACCELERATED FFMPEG PROCESSING END ----------\n")
+                        pass
                     return self.output_path
                 else:
-                    print("Output file was not created, FFmpeg may have failed silently")
+                    pass
                     return ""
             else:
-                print(f"Hardware-accelerated FFmpeg processing failed with return code {process.returncode}")
+                pass
                 if all_output:
                     print(f"FFmpeg output: {all_output[-500:]}")  # Show last 500 chars
-                print("Falling back to software encoding...")
                 return ""
                 
         except Exception as e:
             print(f"Hardware-accelerated FFmpeg processing error: {e}")
-            print("Falling back to software encoding...")
             return ""
 
 class SilencePreviewWidget(QWidget):
@@ -12278,6 +12101,7 @@ class SilencePreviewWidget(QWidget):
                                    stderr=subprocess.PIPE,
                                    creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
+                pass
                 return "ffmpeg"  # ffmpeg is in PATH and working
         except Exception:
             pass  # ffmpeg not in PATH or not working
@@ -12290,7 +12114,9 @@ class SilencePreviewWidget(QWidget):
         ]
         
         for location in known_locations:
+            pass
             if os.path.exists(location):
+                pass
                 return location
                 
         # Could not find FFmpeg, will use just the command and hope it works
@@ -12479,11 +12305,13 @@ class TimelineWidget(QWidget):
     def keyPressEvent(self, event):
         """Handle keyboard shortcuts"""
         if event.modifiers() == Qt.ControlModifier:
+            pass
             if event.key() == Qt.Key_Z:
                 self.undo()
                 event.accept()
                 return
         elif event.modifiers() == (Qt.ControlModifier | Qt.ShiftModifier):
+            pass
             if event.key() == Qt.Key_Z:
                 self.redo()
                 event.accept()
@@ -12504,7 +12332,6 @@ class TimelineWidget(QWidget):
             # Toggle debug info display
             self.show_debug_info = not self.show_debug_info
             self.update()
-            print(f"Debug info display: {'ON' if self.show_debug_info else 'OFF'}")
             event.accept()
             return
         elif event.key() == Qt.Key_B:
@@ -12587,7 +12414,6 @@ class TimelineWidget(QWidget):
         """Handle timeline widget resize - clear cache and force redraw for proper waveform scaling"""
         if hasattr(self, 'waveform_cache'):
             self.waveform_cache.clear()
-            print("  🌊 Timeline waveform cache cleared for resize")
         
         # Force immediate update to redraw waveform with new dimensions
         self.update()
@@ -12657,9 +12483,9 @@ class TimelineWidget(QWidget):
         self.waveform_data = waveform_data
         self.waveform_max_amplitude = max_amplitude
         if waveform_data:
-            print(f"⚡ Waveform loaded: {len(waveform_data)} samples, max amplitude: {max_amplitude:.3f}")
+            pass
         else:
-                print("No audio track found in video")
+            pass
         self.update()  # Trigger repaint
         
         # NOW hide the loading overlay since waveform loading is complete
@@ -12667,7 +12493,6 @@ class TimelineWidget(QWidget):
         while parent and not isinstance(parent, QMainWindow):
             parent = parent.parent()
         if parent and hasattr(parent, 'hide_loading_overlay'):
-            print("✅ Waveform loading complete - hiding loading overlay")
             QTimer.singleShot(500, parent.hide_loading_overlay)  # Small delay to show completion
         
     def on_waveform_progress(self, message):
@@ -12754,10 +12579,6 @@ class TimelineWidget(QWidget):
             if selected_silent_parts:
                 total_cuts_duration = sum(part['end'] - part['start'] for part in selected_silent_parts)
                 self.preview_timeline_duration = self.duration_seconds - total_cuts_duration
-                print(f"🎯 TIMELINE PREVIEW MODE:")
-                print(f"  Original duration: {self.duration_seconds:.3f}s")
-                print(f"  Total cuts: {total_cuts_duration:.3f}s") 
-                print(f"  Preview duration: {self.preview_timeline_duration:.3f}s")
             else:
                 self.preview_timeline_duration = self.duration_seconds
         else:
@@ -12780,18 +12601,18 @@ class TimelineWidget(QWidget):
             
         # Since we're always clicking on the original timeline/waveform, 
         # no conversion is needed - the click is already in original time coordinates
-        print(f"🎯 TIMELINE CLICK (No Conversion Needed):")
-        print(f"  Click position: {click_time_seconds:.3f}s (already in original timeline)")
         return click_time_seconds
         
     def original_time_to_preview_time(self, original_time):
         """Convert original video time to preview timeline position"""
         if not self.preview_mode or not self.silent_parts:
+            pass
             return original_time
             
         # Get selected silent parts (ones that will be cut)
         selected_silent_parts = [part for part in self.silent_parts if part['selected']]
         if not selected_silent_parts:
+            pass
             return original_time
             
         # Sort by start time
@@ -12802,6 +12623,7 @@ class TimelineWidget(QWidget):
         last_end = 0
         
         for silent_part in selected_silent_parts:
+            pass
             if silent_part['start'] > last_end:
                 # Add segment before this silent part
                 preview_segments.append((last_end, silent_part['start']))
@@ -12814,6 +12636,7 @@ class TimelineWidget(QWidget):
         # Convert original time to preview timeline position
         accumulated_preview_time = 0
         for start, end in preview_segments:
+            pass
             if start <= original_time <= end:
                 # The time is within this segment
                 offset_in_segment = original_time - start
@@ -12853,6 +12676,7 @@ class TimelineWidget(QWidget):
         """Convert time to X coordinate considering zoom and offset"""
         start_time, end_time = self.get_visible_time_range()
         if end_time == start_time:
+            pass
             return timeline_rect.left()
         relative_pos = (time_seconds - start_time) / (end_time - start_time)
         return timeline_rect.left() + relative_pos * timeline_rect.width()
@@ -12861,6 +12685,7 @@ class TimelineWidget(QWidget):
         """Convert original timeline time to X coordinate (for waveform and silence regions)"""
         start_time, end_time = self.get_original_visible_time_range()
         if end_time == start_time:
+            pass
             return timeline_rect.left()
         relative_pos = (time_seconds - start_time) / (end_time - start_time)
         return timeline_rect.left() + relative_pos * timeline_rect.width()
@@ -12874,11 +12699,6 @@ class TimelineWidget(QWidget):
         start_time, end_time = self.get_original_visible_time_range()
         original_time = start_time + relative_pos * (end_time - start_time)
         
-        print(f"🎯 X_TO_TIME CONVERSION:")
-        print(f"  Click X: {x:.1f}, Timeline width: {timeline_rect.width():.1f}")
-        print(f"  Relative pos: {relative_pos:.3f}")
-        print(f"  Visible range: {start_time:.3f}s - {end_time:.3f}s")
-        print(f"  Calculated original time: {original_time:.3f}s")
         
         return original_time
         
@@ -12915,7 +12735,9 @@ class TimelineWidget(QWidget):
         
         # Draw silence regions
         for i, (start_ms, end_ms) in enumerate(self.silent_ranges):
+            pass
             if i >= len(self.silent_parts):
+                pass
                 continue
                 
             start_sec = start_ms / 1000
@@ -12923,6 +12745,7 @@ class TimelineWidget(QWidget):
             
             # Skip regions not in visible range (using original timeline)
             if end_sec < original_start_time or start_sec > original_end_time:
+                pass
                 continue
             
             # Calculate region position using original timeline coordinates
@@ -12935,6 +12758,7 @@ class TimelineWidget(QWidget):
             segment_type = part.get('type', 'silence')  # Default to silence if no type specified
             
             if part['selected']:
+                pass
                 if segment_type in ['repeated_word', 'repeated_phrase']:
                     # Purple/violet color for repeated words - different from red silence
                     color = QColor(147, 51, 234, 180)  # Modern purple with transparency  
@@ -13024,6 +12848,7 @@ class TimelineWidget(QWidget):
         current_marker = first_marker
         
         while current_marker <= original_end_time:
+            pass
             if current_marker >= 0:
                 marker_x = self.original_time_to_x(current_marker, timeline_rect)
                 if timeline_rect.left() <= marker_x <= timeline_rect.right():
@@ -13214,6 +13039,7 @@ class TimelineWidget(QWidget):
         # Calculate sample range to display based on ORIGINAL timeline
         total_duration = self.duration_seconds
         if total_duration <= 0:
+            pass
             return
             
         start_sample = int((start_time / total_duration) * len(self.waveform_data))
@@ -13222,11 +13048,13 @@ class TimelineWidget(QWidget):
         end_sample = min(len(self.waveform_data), end_sample)
         
         if start_sample >= end_sample:
+            pass
             return
             
         # Get visible samples
         visible_samples = self.waveform_data[start_sample:end_sample]
         if not visible_samples:
+            pass
             return
             
         # Calculate samples per pixel for the visible range
@@ -13243,6 +13071,7 @@ class TimelineWidget(QWidget):
             sample_end = min(sample_end, len(visible_samples))
             
             if sample_start >= len(visible_samples):
+                pass
                 break
                 
             # Get multiple amplitude measurements for better detail
@@ -13317,7 +13146,9 @@ class TimelineWidget(QWidget):
     def draw_cached_waveform(self, painter, timeline_rect, waveform_bars, waveform_center_y, waveform_height):
         """Draw waveform from cached data for improved performance"""
         for x, bar_data in enumerate(waveform_bars):
+            pass
             if x >= timeline_rect.width():
+                pass
                 break
                 
             # Handle both old and new cache formats
@@ -13366,6 +13197,7 @@ class TimelineWidget(QWidget):
     def draw_debug_info(self, painter, timeline_rect):
         """Draw debug information showing click position and playhead position"""
         if not self.show_debug_info:
+            pass
             return
             
         # Prepare debug text
@@ -13410,6 +13242,7 @@ class TimelineWidget(QWidget):
             debug_lines.append(f"Visible: {visible_start_str} - {visible_end_str}")
         
         if not debug_lines:
+            pass
             return
             
         # Set up drawing
@@ -13445,6 +13278,7 @@ class TimelineWidget(QWidget):
     def format_time_debug(self, seconds):
         """Format time with high precision for debug display"""
         if seconds < 0:
+            pass
             return "00:00.000"
         minutes = int(seconds // 60)
         secs = seconds % 60
@@ -13480,7 +13314,6 @@ class TimelineWidget(QWidget):
                 # Frame buffer stats
                 if 'frame_buffer' in stats:
                     fb_stats = stats['frame_buffer']
-                    print(f"🎬 Frame Buffer:")
                     print(f"   Cache Hit Rate: {fb_stats['hit_rate']:.1f}%")
                     print(f"   Hits: {fb_stats['hits']}, Misses: {fb_stats['misses']}")
                     print(f"   Buffer Size: {fb_stats['size']}/{fb_stats['max_size']}")
@@ -13488,18 +13321,16 @@ class TimelineWidget(QWidget):
                 # Waveform cache stats
                 if 'waveform_cache' in stats:
                     wc_stats = stats['waveform_cache']
-                    print(f"🌊 Waveform Cache:")
                     print(f"   Cached Zoom Levels: {wc_stats['size']}/{wc_stats['max_size']}")
                     
                 # Cache status
                 cache_status = "✅ ENABLED" if self.cache_enabled else "❌ DISABLED"
-                print(f"💾 Waveform Caching: {cache_status}")
                 
                 print("=" * 50)
                 print("Press 'B' again to refresh stats")
                 
             else:
-                print("📊 Buffer stats not available")
+                pass
                 
         except Exception as e:
             print(f"Error showing buffer stats: {e}")
@@ -13507,7 +13338,6 @@ class TimelineWidget(QWidget):
     def enable_caching(self):
         """Enable waveform caching after initial loading"""
         self.cache_during_loading = True
-        print("💾 Waveform caching enabled")
         
     def disable_caching(self):
         """Disable waveform caching during heavy operations"""
@@ -13515,6 +13345,7 @@ class TimelineWidget(QWidget):
         
     def mousePressEvent(self, event):
         if event.button() != Qt.LeftButton or self.duration_seconds <= 0:
+            pass
             return
         
         # Check if clicking on reset zoom button
@@ -13567,6 +13398,7 @@ class TimelineWidget(QWidget):
             
             # Skip regions not in visible range (use original timeline)
             if end_sec < original_start_time or start_sec > original_end_time:
+                pass
                 continue
             
             start_x = self.original_time_to_x(start_sec, timeline_rect)
@@ -13608,12 +13440,12 @@ class TimelineWidget(QWidget):
             # Instantly update playhead position for immediate visual feedback
             self.set_position(seek_time, instant=True)
             
-            print(f"Timeline click: seeking to {seek_time:.6f}s (high precision)")
             self.position_changed.emit(seek_time)
             self.seeking = True
             
     def mouseMoveEvent(self, event):
         if self.duration_seconds <= 0:
+            pass
             return
             
         # Calculate timeline area
@@ -13673,6 +13505,7 @@ class TimelineWidget(QWidget):
             
             # Skip regions not in visible range (use original timeline)
             if end_sec < original_start_time or start_sec > original_end_time:
+                pass
                 continue
             
             start_x = self.original_time_to_x(start_sec, timeline_rect)
@@ -13708,6 +13541,7 @@ class TimelineWidget(QWidget):
             button_hover = True
         
         if self.hover_region is None and not button_hover:
+            pass
             if timeline_rect.contains(click_x, click_y):
                 self.setCursor(Qt.ArrowCursor)
             else:
@@ -13718,6 +13552,7 @@ class TimelineWidget(QWidget):
     
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton:
+            pass
             if self.dragging_region is not None:
                 # Save state after dragging for undo functionality
                 self.save_state()
@@ -14016,7 +13851,7 @@ class InteractiveVideoPlayer(QWidget):
             self.load_audio_only(video_path)
             return
         else:
-            print(f"Loading video into player: {video_path}")
+            pass
         
         # Update loading progress
         parent = self.parent()
@@ -14028,7 +13863,6 @@ class InteractiveVideoPlayer(QWidget):
         if os.path.exists(video_path):
             # Convert path to proper format for QMediaPlayer
             abs_path = os.path.abspath(video_path)
-            print(f"Absolute path: {abs_path}")
             
             # Update loading progress
             if parent and hasattr(parent, 'update_loading_progress_with_step'):
@@ -14039,14 +13873,11 @@ class InteractiveVideoPlayer(QWidget):
             
             # Create QUrl from local file
             url = QUrl.fromLocalFile(abs_path)
-            print(f"QUrl created: {url.toString()}")
             
             # Set media content
             media_content = QMediaContent(url)
             self.media_player.setMedia(media_content)
             
-            print(f"Media player state after setMedia: {self.media_player.state()}")
-            print(f"Media player media status: {self.media_player.mediaStatus()}")
             
             # Enable controls
             self.play_pause_btn.setEnabled(True)
@@ -14099,7 +13930,6 @@ class InteractiveVideoPlayer(QWidget):
             from pydub import AudioSegment
             audio = AudioSegment.from_file(audio_path)
             duration_seconds = len(audio) / 1000.0
-            print(f"🎵 Audio duration detected: {duration_seconds:.2f} seconds")
             
             # Set timeline duration immediately
             self.timeline_widget.set_duration(duration_seconds)
@@ -14148,7 +13978,6 @@ class InteractiveVideoPlayer(QWidget):
             parent = parent.parent()
             
         if status == QMediaPlayer.InvalidMedia or status == QMediaPlayer.NoMedia:
-            print("QMediaPlayer failed to load video, setting up fallback display")
             if parent and hasattr(parent, 'update_loading_progress_with_step'):
                 parent.update_loading_progress_with_step("Setting up enhanced video player...", 5)
             self.setup_fallback_video_display()
@@ -14177,6 +14006,7 @@ class InteractiveVideoPlayer(QWidget):
                 if parent and hasattr(parent, 'update_loading_progress_with_step'):
                     parent.update_loading_progress_with_step("Audio ready!", 4)
             else:
+                pass
                 if parent and hasattr(parent, 'update_loading_progress_with_step'):
                     parent.update_loading_progress_with_step("Finalizing setup...", 6)
             
@@ -14194,7 +14024,6 @@ class InteractiveVideoPlayer(QWidget):
                 from pydub import AudioSegment
                 audio = AudioSegment.from_file(self.video_path)
                 actual_audio_duration = len(audio) / 1000.0
-                print(f"Audio player using exact audio duration: {actual_audio_duration:.6f}s (high precision)")
                 
                 # Set up basic audio playback without video thread
                 duration_ms = int(actual_audio_duration * 1000)
@@ -14215,14 +14044,12 @@ class InteractiveVideoPlayer(QWidget):
                 
                 return
             
-            print("Setting up multi-threaded video playback...")
             
             # First get the actual audio duration for accurate timeline sync
             import moviepy.editor as mp
             video_clip = mp.VideoFileClip(self.video_path)
             actual_audio_duration = video_clip.duration if video_clip.audio else 0
             video_clip.close()
-            print(f"Video player using exact audio duration: {actual_audio_duration:.6f}s (high precision)")
             
             # Initialize the video playback thread
             self.video_thread = VideoPlaybackThread(self.video_path, self)
@@ -14240,7 +14067,6 @@ class InteractiveVideoPlayer(QWidget):
             thread_audio_duration = getattr(self.video_thread, 'verified_audio_duration', actual_audio_duration)
             thread_video_duration = getattr(self.video_thread, 'actual_duration', actual_audio_duration)
             
-            print(f"🎵 DURATION SYNC VERIFICATION:")
             print(f"  Video clip duration: {actual_audio_duration:.6f}s")
             print(f"  Thread audio duration: {thread_audio_duration:.6f}s")
             print(f"  Thread video duration: {thread_video_duration:.6f}s")
@@ -14248,10 +14074,8 @@ class InteractiveVideoPlayer(QWidget):
             # Use the thread's verified audio duration for perfect timeline sync
             if hasattr(self.video_thread, 'verified_audio_duration'):
                 duration_seconds = self.video_thread.verified_audio_duration
-                print(f"✓ Using thread verified audio duration: {duration_seconds:.6f}s")
             else:
                 duration_seconds = actual_audio_duration
-                print(f"Using fallback duration: {duration_seconds:.6f}s")
             
             # Get video properties using OpenCV for UI setup
             cap = cv2.VideoCapture(self.video_path)
@@ -14260,8 +14084,6 @@ class InteractiveVideoPlayer(QWidget):
                 frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                 
                 duration_ms = int(duration_seconds * 1000)
-                print(f"Final synchronized duration: {duration_seconds:.6f}s -> {duration_ms}ms")
-                print(f"Multi-threaded video: {frame_count} frames, {fps} FPS")
                 
                 # Store properties
                 self.video_fps = fps
@@ -14271,19 +14093,17 @@ class InteractiveVideoPlayer(QWidget):
                 self.using_fallback = True
                 
                 # CRITICAL: Ensure timeline uses the EXACT same duration as the audio thread
-                print(f"🎯 Setting timeline to EXACT thread duration: {duration_seconds:.6f}s")
                 self.timeline_widget.set_duration(duration_seconds)
                 self.position_slider.setRange(0, duration_ms)
                 
                 # Cross-verify timeline duration matches audio thread duration
                 timeline_duration = getattr(self.timeline_widget, 'duration_seconds', 0)
                 duration_diff = abs(timeline_duration - duration_seconds)
-                print(f"Timeline duration verification: {timeline_duration:.6f}s (diff: {duration_diff:.6f}s)")
                 
                 if duration_diff > 0.001:  # Warn if difference > 1ms
                     print(f"⚠️  WARNING: Timeline-audio duration mismatch: {duration_diff:.6f}s")
                 else:
-                    print(f"✓ Perfect timeline-audio duration sync verified!")
+                    pass
                 
                 cap.release()
                 
@@ -14332,22 +14152,16 @@ class InteractiveVideoPlayer(QWidget):
             if (self._debug_threaded_frame_count % 30 == 0 or 
                 self._debug_threaded_last_label_size != label_size):
                 
-                print(f"🧵 THREADED DEBUG Frame {self._debug_threaded_frame_count}:")
-                print(f"  🏷️  Label size: {label_size}")
-                print(f"  🖼️  Input pixmap size: {pixmap.size()}")
                 
                 container_widget = self.video_frame_label.parent()
                 if container_widget:
-                    print(f"  📦 Container size: {container_widget.size()}")
-                    print(f"  📐 Container geometry: {container_widget.geometry()}")
+                    pass
                 
-                print(f"  🏷️  Label geometry: {self.video_frame_label.geometry()}")
                 
                 # Check if label size increased
                 if (self._debug_threaded_last_label_size and label_size and 
                     (label_size.height() > self._debug_threaded_last_label_size.height() or 
                      label_size.width() > self._debug_threaded_last_label_size.width())):
-                    print(f"🚨 THREADED LABEL SIZE INCREASED!")
                     print(f"  📈 From: {self._debug_threaded_last_label_size}")
                     print(f"  📈 To: {label_size}")
                 
@@ -14361,19 +14175,17 @@ class InteractiveVideoPlayer(QWidget):
                 
                 # DEBUG: Log scaling details
                 if self._debug_threaded_frame_count % 30 == 0:
-                    print(f"🧵 🖼️  Threaded scaled pixmap: {scaled_pixmap.size()}")
-                    print(f"🧵 🖼️  Target label size: {label_size}")
                     print()
                 
                 self.video_frame_label.setPixmap(scaled_pixmap)
             else:
                 # Fallback if container size not available yet
-                print(f"🧵 ⚠️  Using fallback - label size not available: {label_size}")
                 self.video_frame_label.setPixmap(pixmap)
             
     def update_threaded_position(self, frame_number):
         """Update UI based on current frame from video thread"""
         if not hasattr(self, 'video_fps') or self.video_fps <= 0:
+            pass
             return
         
         # Calculate time based on actual duration ratio instead of pure FPS calculation
@@ -14444,17 +14256,14 @@ class InteractiveVideoPlayer(QWidget):
     def toggle_threaded_playback(self):
         """Toggle play/pause for threaded video playback"""
         if not hasattr(self, 'video_thread'):
+            pass
             return
             
         # DEBUG: Log playback state changes and container size
         if hasattr(self, 'video_frame_label'):
             container_widget = self.video_frame_label.parent()
-            print(f"🎮 PLAYBACK TOGGLE DEBUG:")
-            print(f"  🏷️  Label size before: {self.video_frame_label.size()}")
-            print(f"  🏷️  Label geometry before: {self.video_frame_label.geometry()}")
             if container_widget:
-                print(f"  📦 Container size before: {container_widget.size()}")
-                print(f"  📐 Container geometry before: {container_widget.geometry()}")
+                pass
             
         if hasattr(self, 'is_threaded_playing') and self.is_threaded_playing:
             print(f"  ⏸️  Pausing playback...")
@@ -14462,7 +14271,6 @@ class InteractiveVideoPlayer(QWidget):
             self.is_threaded_playing = False
             self.play_pause_btn.setText("Play")
         else:
-            print(f"  ▶️  Starting playback...")
             self.video_thread.play()
             self.is_threaded_playing = True
             self.play_pause_btn.setText("Pause")
@@ -14470,11 +14278,8 @@ class InteractiveVideoPlayer(QWidget):
         # DEBUG: Log container size after playback change
         if hasattr(self, 'video_frame_label'):
             container_widget = self.video_frame_label.parent()
-            print(f"  🏷️  Label size after: {self.video_frame_label.size()}")
-            print(f"  🏷️  Label geometry after: {self.video_frame_label.geometry()}")
             if container_widget:
-                print(f"  📦 Container size after: {container_widget.size()}")
-                print(f"  📐 Container geometry after: {container_widget.geometry()}")
+                pass
             print()
             
     def stop_threaded_playback(self):
@@ -14533,12 +14338,10 @@ class InteractiveVideoPlayer(QWidget):
             if container_size.width() > 0 and container_size.height() > 0:
                 # Set the label to exactly match the container size
                 self.video_frame_label.setFixedSize(container_size)
-                print(f"🔒 Fixed video label size to container: {container_size}")
             else:
                 # Fallback to a reasonable default size
                 default_size = QSize(800, 450)  # 16:9 aspect ratio
                 self.video_frame_label.setFixedSize(default_size)
-                print(f"🔒 Fixed video label size to default: {default_size}")
             
             # Replace the video widget in the layout with the video frame label
             layout = self.layout()
@@ -14548,20 +14351,18 @@ class InteractiveVideoPlayer(QWidget):
                 layout.addWidget(self.video_frame_label, 1)  # Stretch to fill available space
                 
             # DEBUG: Log initial setup
-            print(f"🔧 Video display label setup:")
             print(f"  🏷️  Initial label size: {self.video_frame_label.size()}")
             print(f"  🏷️  Initial label geometry: {self.video_frame_label.geometry()}")
-            print(f"  🎯 Label sizePolicy: {self.video_frame_label.sizePolicy().horizontalPolicy()}, {self.video_frame_label.sizePolicy().verticalPolicy()}")
             if self.video_frame_label.parent():
                 print(f"  📦 Parent size: {self.video_frame_label.parent().size()}")
                 print(f"  📐 Parent geometry: {self.video_frame_label.parent().geometry()}")
             print()
                 
-        print(f"Video display label added to layout with FIXED size policy to prevent auto-resizing")
         
     def display_cv2_frame(self, frame):
         """Convert OpenCV frame to QPixmap and display it with proper aspect ratio and quality"""
         try:
+            pass
             if not hasattr(self, 'video_frame_label'):
                 self.setup_video_display_label()
                 
@@ -14576,6 +14377,7 @@ class InteractiveVideoPlayer(QWidget):
             # Get video label size for scaling
             label_size = self.video_frame_label.size()
             if label_size.width() <= 0 or label_size.height() <= 0:
+                pass
                 return
                 
             # DEBUG: Monitor container and label size changes
@@ -14587,30 +14389,22 @@ class InteractiveVideoPlayer(QWidget):
                 self._debug_last_container_size != container_size or 
                 self._debug_last_label_size != label_size):
                 
-                print(f"🔍 DEBUG Frame {self._debug_frame_count}:")
-                print(f"  📦 Container size: {container_size}")
-                print(f"  🏷️  Label size: {label_size}")
                 print(f"  📏 Frame dimensions: {frame.shape[:2]}")
                 
                 if container_widget:
-                    print(f"  📐 Container geometry: {container_widget.geometry()}")
-                    print(f"  🎯 Container sizePolicy: {container_widget.sizePolicy().horizontalPolicy()}, {container_widget.sizePolicy().verticalPolicy()}")
+                    pass
                     
-                print(f"  🏷️  Label geometry: {self.video_frame_label.geometry()}")
-                print(f"  🎯 Label sizePolicy: {self.video_frame_label.sizePolicy().horizontalPolicy()}, {self.video_frame_label.sizePolicy().verticalPolicy()}")
                 
                 # Check if size increased
                 if (self._debug_last_container_size and container_size and 
                     (container_size.height() > self._debug_last_container_size.height() or 
                      container_size.width() > self._debug_last_container_size.width())):
-                    print(f"🚨 CONTAINER SIZE INCREASED!")
                     print(f"  📈 From: {self._debug_last_container_size}")
                     print(f"  📈 To: {container_size}")
                     
                 if (self._debug_last_label_size and label_size and 
                     (label_size.height() > self._debug_last_label_size.height() or 
                      label_size.width() > self._debug_last_label_size.width())):
-                    print(f"🚨 LABEL SIZE INCREASED!")
                     print(f"  📈 From: {self._debug_last_label_size}")
                     print(f"  📈 To: {label_size}")
                 
@@ -14626,11 +14420,13 @@ class InteractiveVideoPlayer(QWidget):
             # Create QImage from original frame
             qt_image = QImage(rgb_frame.data, original_width, original_height, bytes_per_line, QImage.Format_RGB888)
             if qt_image.isNull():
+                pass
                 return
                 
             # Create pixmap from QImage
             pixmap = QPixmap.fromImage(qt_image)
             if pixmap.isNull():
+                pass
                 return
             
             # Scale pixmap to fit within the label while maintaining aspect ratio
@@ -14639,9 +14435,6 @@ class InteractiveVideoPlayer(QWidget):
             
             # DEBUG: Log pixmap scaling details
             if self._debug_frame_count % 30 == 0:
-                print(f"🖼️  Original pixmap: {pixmap.size()}")
-                print(f"🖼️  Scaled pixmap: {scaled_pixmap.size()}")
-                print(f"🖼️  Target label size: {label_size}")
                 print()
             
             # Set the scaled pixmap - this will maintain stable dimensions
@@ -14653,6 +14446,7 @@ class InteractiveVideoPlayer(QWidget):
     def seek_to_fallback_frame(self, frame_number):
         """Seek to a specific frame number with maximum performance optimization"""
         try:
+            pass
             if not hasattr(self, 'video_cap') or not self.video_cap.isOpened():
                 self.video_cap = cv2.VideoCapture(self.video_path)
                 
@@ -14690,6 +14484,7 @@ class InteractiveVideoPlayer(QWidget):
     def play_next_frame(self):
         """Play the next frame with maximum speed optimization"""
         if not self.is_playing or not hasattr(self, 'video_frame_count'):
+            pass
             return
             
         # Simple frame advancement without complex timing calculations
@@ -14735,6 +14530,7 @@ class InteractiveVideoPlayer(QWidget):
     def toggle_fallback_playback(self):
         """Toggle play/pause for fallback video playback"""
         if not hasattr(self, 'using_fallback') or not self.using_fallback:
+            pass
             return
             
         if self.is_playing:
@@ -14745,6 +14541,7 @@ class InteractiveVideoPlayer(QWidget):
     def play_fallback_playback(self):
         """Start playing the video using fallback system with maximum speed"""
         if not hasattr(self, 'using_fallback') or not self.using_fallback:
+            pass
             return
             
         self.is_playing = True
@@ -14756,6 +14553,7 @@ class InteractiveVideoPlayer(QWidget):
     def pause_fallback_playback(self):
         """Pause the video playback"""
         if not hasattr(self, 'using_fallback') or not self.using_fallback:
+            pass
             return
             
         self.is_playing = False
@@ -14765,6 +14563,7 @@ class InteractiveVideoPlayer(QWidget):
     def stop_fallback_playback(self):
         """Stop the video playback and return to start"""
         if not hasattr(self, 'using_fallback') or not self.using_fallback:
+            pass
             return
             
         self.is_playing = False
@@ -14776,6 +14575,7 @@ class InteractiveVideoPlayer(QWidget):
     def seek_to_fallback_position(self, position_seconds):
         """Seek to a specific position in seconds for fallback playback"""
         if not hasattr(self, 'using_fallback') or not self.using_fallback:
+            pass
             return
             
         if self.video_fps > 0:
@@ -14823,9 +14623,6 @@ class InteractiveVideoPlayer(QWidget):
                 # Convert original time to preview time for the video thread
                 preview_time = self.video_thread.original_time_to_preview_time(original_time)
                 
-                print(f"🔧 PREVIEW TIMELINE SEEK:")
-                print(f"  Original time from timeline: {original_time:.6f}s")
-                print(f"  Preview time for video thread: {preview_time:.6f}s")
                 
                 # Use the preview time for seeking
                 self.video_thread.seek_time_direct(preview_time)
@@ -14895,14 +14692,10 @@ class InteractiveVideoPlayer(QWidget):
     def resizeEvent(self, event):
         """Handle widget resize events"""
         # DEBUG: Log video player widget resize events
-        print(f"🎬 VIDEO PLAYER WIDGET RESIZE EVENT:")
-        print(f"  📏 Old size: {event.oldSize()}")
-        print(f"  📏 New size: {event.size()}")
         
         # DEBUG: Log video frame label size before resize
         if hasattr(self, 'video_frame_label'):
-            print(f"  🏷️  Label size before: {self.video_frame_label.size()}")
-            print(f"  🏷️  Label geometry before: {self.video_frame_label.geometry()}")
+            pass
         
         super().resizeEvent(event)
         
@@ -14916,7 +14709,6 @@ class InteractiveVideoPlayer(QWidget):
                 size_diff = abs(new_size.width() - current_size.width()) + abs(new_size.height() - current_size.height())
                 
                 if size_diff > 5:  # Only resize if difference is more than 5 pixels total
-                    print(f"  🔄 Updating video label fixed size: {current_size} → {new_size}")
                     self.video_frame_label.setFixedSize(new_size)
                     
                     # If there's a current frame, rescale it to fit the new container size
@@ -14926,14 +14718,12 @@ class InteractiveVideoPlayer(QWidget):
                             # Scale pixmap to fit new container size while maintaining aspect ratio
                             scaled_pixmap = current_pixmap.scaled(new_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                             self.video_frame_label.setPixmap(scaled_pixmap)
-                            print(f"  🖼️  Rescaled current frame to fit new container: {scaled_pixmap.size()}")
                 else:
                     print(f"  ⏭️  Skipping micro-resize (diff: {size_diff}px)")
         
         # DEBUG: Log video frame label size after resize
         if hasattr(self, 'video_frame_label'):
-            print(f"  🏷️  Label size after: {self.video_frame_label.size()}")
-            print(f"  🏷️  Label geometry after: {self.video_frame_label.geometry()}")
+            pass
         print()
         
         # Reposition message label if it exists and is visible
@@ -14950,6 +14740,7 @@ class InteractiveVideoPlayer(QWidget):
             
         # In fullscreen mode, ensure video frame label fills the screen
         if hasattr(self.parent(), 'is_fullscreen') and self.parent().is_fullscreen:
+            pass
             if hasattr(self, 'video_frame_label') and self.video_frame_label:
                 print(f"  🖥️  Setting fullscreen geometry: {event.size()}")
                 self.video_frame_label.setFixedSize(event.size())
@@ -14957,6 +14748,7 @@ class InteractiveVideoPlayer(QWidget):
     def cleanup_fallback_resources(self):
         """Clean up video resources"""
         try:
+            pass
             if hasattr(self, 'video_thread') and self.video_thread is not None:
                 self.video_thread.stop_playback()
                 self.video_thread.wait(1000)  # Wait up to 1 second for thread to finish
@@ -14965,6 +14757,7 @@ class InteractiveVideoPlayer(QWidget):
             pass  # Thread already cleaned up
             
         try:
+            pass
             if hasattr(self, 'video_cap') and self.video_cap is not None:
                 self.video_cap.release()
                 self.video_cap = None
@@ -14984,11 +14777,9 @@ class InteractiveVideoPlayer(QWidget):
             
         # Ensure timeline duration is set correctly before adding silent parts
         if hasattr(self, 'actual_duration_seconds') and self.actual_duration_seconds > 0:
-            print(f"Setting timeline duration to actual duration: {self.actual_duration_seconds:.3f}s")
             self.timeline_widget.set_duration(self.actual_duration_seconds)
         elif hasattr(self, 'video_duration_ms') and self.video_duration_ms > 0:
             duration_seconds = self.video_duration_ms / 1000
-            print(f"Setting timeline duration from video: {duration_seconds:.3f}s")
             self.timeline_widget.set_duration(duration_seconds)
             
         # Update timeline
@@ -14999,6 +14790,7 @@ class InteractiveVideoPlayer(QWidget):
         if hasattr(self, 'using_fallback') and self.using_fallback and hasattr(self, 'video_thread'):
             self.toggle_threaded_playback()
         else:
+            pass
             if self.media_player.state() == QMediaPlayer.PlayingState:
                 self.media_player.pause()
             else:
@@ -15139,7 +14931,6 @@ class InteractiveVideoPlayer(QWidget):
         else:
             status_string = f"Status: {status}"
             
-        print(f"Media status changed: {status_string}")
         
     def format_time_simple(self, seconds):
         """Format time in MM:SS format"""
@@ -15151,6 +14942,7 @@ class InteractiveVideoPlayer(QWidget):
         """Handle selection changes from timeline"""
         # Update preview mode in real-time when selections change
         if self.preview_mode:
+            pass
             if hasattr(self, 'video_thread') and self.video_thread:
                 # Video file preview mode
                 self.video_thread.set_preview_mode(True, self.silent_parts)
@@ -15169,13 +14961,13 @@ class InteractiveVideoPlayer(QWidget):
             # Update time label to reflect new duration
             self.update_time_label_display()
             
-            print(f"🔄 Preview mode updated: {len([p for p in self.silent_parts if p['selected']])} selected regions, new duration: {getattr(self, 'preview_duration', 0):.1f}s")
         
         self.selection_changed.emit(changed_part)
     
     def toggle_all_silent_regions(self):
         """Toggle all silent regions - if any are selected, deselect all; if none are selected, select all"""
         if not self.silent_parts:
+            pass
             return
             
         # Check if any regions are currently selected
@@ -15186,18 +14978,17 @@ class InteractiveVideoPlayer(QWidget):
             for part in self.silent_parts:
                 part['selected'] = False
             self.select_all_btn.setText("☑️ Select All Silent Regions")
-            print("🔄 All regions deselected")
         else:
             # Select all
             for part in self.silent_parts:
                 part['selected'] = True
             self.select_all_btn.setText("☐ Deselect All Silent Regions")
-            print("🔄 All regions selected")
         
         self.timeline_widget.update()
         
         # Update preview mode in real-time
         if self.preview_mode:
+            pass
             if hasattr(self, 'video_thread') and self.video_thread:
                 # Video file preview mode
                 self.video_thread.set_preview_mode(True, self.silent_parts)
@@ -15210,7 +15001,6 @@ class InteractiveVideoPlayer(QWidget):
             if hasattr(self, 'preview_duration') and self.preview_duration > 0:
                 self.position_slider.setRange(0, int(self.preview_duration * 1000))
             self.update_time_label_display()
-            print(f"🔄 New duration: {getattr(self, 'preview_duration', 0):.1f}s")
         
         self.selection_changed.emit({})
         
@@ -15228,7 +15018,6 @@ class InteractiveVideoPlayer(QWidget):
             if self.preview_duration > 0:
                 self.position_slider.setRange(0, int(self.preview_duration * 1000))
             self.update_time_label_display()
-            print(f"🔄 All regions selected: new duration: {self.preview_duration:.1f}s")
         
         self.selection_changed.emit({})
         
@@ -15246,7 +15035,6 @@ class InteractiveVideoPlayer(QWidget):
             if self.preview_duration > 0:
                 self.position_slider.setRange(0, int(self.preview_duration * 1000))
             self.update_time_label_display()
-            print(f"🔄 All regions deselected: new duration: {self.preview_duration:.1f}s")
         
         self.selection_changed.emit({})
 
@@ -15300,11 +15088,11 @@ class InteractiveVideoPlayer(QWidget):
             self.preview_mode = False
             if hasattr(self, 'video_thread') and self.video_thread:
                 self.video_thread.set_preview_mode(False)
-            print("✓ Preview mode disabled")
     
     def enable_preview_mode(self):
         """Enable preview mode automatically after silence detection"""
         if not self.silent_parts:
+            pass
             return
                 
         # Enable preview mode
@@ -15327,7 +15115,6 @@ class InteractiveVideoPlayer(QWidget):
         if hasattr(self, 'preview_duration') and self.preview_duration > 0:
             self.position_slider.setRange(0, int(self.preview_duration * 1000))
             
-        print(f"✓ Preview mode enabled automatically. Original: {getattr(self, 'actual_duration_seconds', 0):.1f}s → Preview: {getattr(self, 'preview_duration', 0):.1f}s")
         
         # Update time label immediately
         self.update_time_label_display()
@@ -15335,6 +15122,7 @@ class InteractiveVideoPlayer(QWidget):
     def setup_audio_preview_mode(self):
         """Set up preview mode for audio files using QMediaPlayer"""
         if not self.silent_parts:
+            pass
             return
             
         # Calculate preview segments (non-silent parts)
@@ -15389,15 +15177,16 @@ class InteractiveVideoPlayer(QWidget):
         self.current_preview_segment = None
         self.preview_start_time = None
         
-        print(f"🎵 Audio preview mode set up: {len(self.audio_preview_segments)} segments, total duration: {self.preview_duration:.1f}s")
         
     def convert_preview_to_original_time(self, preview_time):
         """Convert preview time to original time for audio files"""
         if not hasattr(self, 'audio_preview_segments') or not self.audio_preview_segments:
+            pass
             return preview_time
             
         # Find which segment this preview time belongs to
         for segment in self.audio_preview_segments:
+            pass
             if segment['preview_start'] <= preview_time <= segment['preview_end']:
                 # Calculate offset within the segment
                 offset = preview_time - segment['preview_start']
@@ -15405,17 +15194,21 @@ class InteractiveVideoPlayer(QWidget):
                 
         # If not found in any segment, return the closest boundary
         if preview_time < self.audio_preview_segments[0]['preview_start']:
+            pass
             return self.audio_preview_segments[0]['original_start']
         else:
+            pass
             return self.audio_preview_segments[-1]['original_end']
             
     def convert_original_to_preview_time(self, original_time):
         """Convert original time to preview time for audio files"""
         if not hasattr(self, 'audio_preview_segments') or not self.audio_preview_segments:
+            pass
             return original_time
             
         # Find which segment this original time belongs to
         for segment in self.audio_preview_segments:
+            pass
             if segment['original_start'] <= original_time <= segment['original_end']:
                 # Calculate offset within the segment
                 offset = original_time - segment['original_start']
@@ -15424,7 +15217,9 @@ class InteractiveVideoPlayer(QWidget):
         # If in a silent part, find the nearest segment boundary
         preview_time = 0.0
         for segment in self.audio_preview_segments:
+            pass
             if original_time < segment['original_start']:
+                pass
                 return preview_time
             elif original_time <= segment['original_end']:
                 offset = original_time - segment['original_start']
@@ -15442,6 +15237,7 @@ class InteractiveVideoPlayer(QWidget):
             # Find if current position is in a non-silent segment
             current_segment = None
             for segment in self.audio_preview_segments:
+                pass
                 if segment['original_start'] <= original_time_s <= segment['original_end']:
                     current_segment = segment
                     break
@@ -15467,6 +15263,7 @@ class InteractiveVideoPlayer(QWidget):
                 # We're in a silent part, skip to next non-silent segment
                 next_segment = None
                 for segment in self.audio_preview_segments:
+                    pass
                     if segment['original_start'] > original_time_s:
                         next_segment = segment
                         break
@@ -15648,7 +15445,6 @@ class SilenceCutterApp(QMainWindow):
         # Initialize manual cutting feature
         if MANUAL_CUTTING_AVAILABLE:
             self.manual_cutting_manager = ManualCuttingManager(self)
-            print("✅ Manual cutting manager initialized")
         else:
             self.manual_cutting_manager = None
         
@@ -15657,9 +15453,9 @@ class SilenceCutterApp(QMainWindow):
         # Initialize transcript integration
         global TRANSCRIPT_INTEGRATION_AVAILABLE
         if TRANSCRIPT_INTEGRATION_AVAILABLE:
+            pass
             try:
                 integrate_transcript_with_app(self)
-                print("✅ Transcript integration initialized successfully")
             except Exception as e:
                 print(f"⚠️  Transcript integration failed: {e}")
                 TRANSCRIPT_INTEGRATION_AVAILABLE = False
@@ -16107,7 +15903,6 @@ class SilenceCutterApp(QMainWindow):
                 # Connect manual cutting signals to update export button
                 self.manual_cutting_manager.manual_cuts_changed.connect(self.update_export_button_state)
                 
-                print("✅ Manual cutting integrated with timeline and video player")
         
         # Fullscreen button overlay
         self.fullscreen_btn = QPushButton("⛶")
@@ -16363,7 +16158,6 @@ class SilenceCutterApp(QMainWindow):
                 # Audio files load faster than video files
                 time_multiplier = 0.2 if is_audio else 0.5
                 self.estimated_total_time = max(3, min(20, file_size_mb * time_multiplier))
-                print(f"📁 File size: {file_size_mb:.1f} MB, estimated loading time: {self.estimated_total_time:.0f}s")
             except:
                 self.estimated_total_time = 10 if is_audio else 15  # Default estimate
             
@@ -16374,6 +16168,7 @@ class SilenceCutterApp(QMainWindow):
 
             # Start transcript generation if available
             if TRANSCRIPT_INTEGRATION_AVAILABLE:
+                pass
                 try:
                     start_transcript_generation(self, file_path)
                 except Exception as e:
@@ -16442,6 +16237,7 @@ class SilenceCutterApp(QMainWindow):
             else:
                 time_str = "Almost done..."
         else:
+            pass
             if hasattr(self, 'estimated_total_time'):
                 time_str = f"~{int(self.estimated_total_time)}s estimated"
             else:
@@ -16476,6 +16272,7 @@ class SilenceCutterApp(QMainWindow):
     
     def detect_silence(self):
         if not self.video_path:
+            pass
             return
         
         # Get current threshold and duration values
@@ -16494,7 +16291,6 @@ class SilenceCutterApp(QMainWindow):
         try:
             file_size_mb = os.path.getsize(self.video_path) / (1024 * 1024)
             self.detection_estimated_time = max(10, min(120, file_size_mb * 2))  # Rough estimate: 2 seconds per MB, 10-120 second range
-            print(f"📁 Detection for {file_size_mb:.1f} MB file, estimated time: {self.detection_estimated_time:.0f}s")
         except:
             self.detection_estimated_time = 30  # Default estimate
         
@@ -16526,6 +16322,7 @@ class SilenceCutterApp(QMainWindow):
     def update_detection_countdown(self):
         """Update detection progress with real-time countdown"""
         if not hasattr(self, 'current_detection_progress'):
+            pass
             return
             
         progress = self.current_detection_progress
@@ -16574,6 +16371,7 @@ class SilenceCutterApp(QMainWindow):
         
         # Clean up countdown variables
         for attr in ['detection_countdown_time', 'detection_last_update', 'current_detection_progress']:
+            pass
             if hasattr(self, attr):
                 delattr(self, attr)
         
@@ -16600,11 +16398,9 @@ class SilenceCutterApp(QMainWindow):
         # Re-enable performance optimizations after detection
         self.enable_performance_optimizations()
         
-        print(f"✅ Detection completed! Found {len(silent_parts)} silent regions")
         
         # Log results to console (no popup)
         total_silence_duration = sum(part['end'] - part['start'] for part in silent_parts)
-        print(f"📊 Detection Results:")
         print(f"  • Found {len(silent_parts)} silent regions")
         print(f"  • Total silence duration: {total_silence_duration:.1f} seconds")
         print(f"  • Click on timeline regions to select/deselect them for processing")
@@ -16617,6 +16413,7 @@ class SilenceCutterApp(QMainWindow):
     def update_export_button_state(self):
         """Update export button state based on selected regions"""
         if not hasattr(self, 'export_btn'):
+            pass
             return
             
         # Check if there are selected silence regions
@@ -16638,10 +16435,10 @@ class SilenceCutterApp(QMainWindow):
                 manual_count = sum(1 for cut in self.manual_cutting_manager.manual_cuts if cut.get('selected', False))
             
             total_count = silence_count + manual_count
-            print(f"🔄 Export button enabled: {silence_count} silence regions + {manual_count} manual cuts = {total_count} total")
     
     def process_video(self):
         if not self.video_path:
+            pass
             return
         
         # Get selected silent parts
@@ -16656,6 +16453,7 @@ class SilenceCutterApp(QMainWindow):
         all_selected_parts = selected_parts + manual_cuts
         
         if not all_selected_parts:
+            pass
             if not self.silent_parts and not manual_cuts:
                 QMessageBox.warning(self, "No Regions", "Please detect silence or create manual cuts first.")
             else:
@@ -16687,6 +16485,7 @@ class SilenceCutterApp(QMainWindow):
             )
         
         if not output_path:
+            pass
             return
         
         # Disable UI elements during processing
@@ -16706,7 +16505,6 @@ class SilenceCutterApp(QMainWindow):
             # Audio processing is generally faster than video processing
             time_multiplier = 2 if is_audio else 5
             self.processing_estimated_time = max(15 if is_audio else 30, min(120 if is_audio else 300, file_size_mb * time_multiplier))
-            print(f"📁 Processing {file_size_mb:.1f} MB {'audio' if is_audio else 'video'} file, estimated time: {self.processing_estimated_time:.0f}s")
         except:
             self.processing_estimated_time = 30 if is_audio else 60  # Default estimate
         
@@ -16734,6 +16532,7 @@ class SilenceCutterApp(QMainWindow):
     def update_processing_countdown(self):
         """Update processing progress with real-time countdown"""
         if not hasattr(self, 'current_processing_progress'):
+            pass
             return
             
         progress = self.current_processing_progress
@@ -16782,6 +16581,7 @@ class SilenceCutterApp(QMainWindow):
         
         # Clean up countdown variables
         for attr in ['processing_countdown_time', 'processing_last_update', 'current_processing_progress']:
+            pass
             if hasattr(self, attr):
                 delattr(self, attr)
         
@@ -16796,7 +16596,6 @@ class SilenceCutterApp(QMainWindow):
         self.process_btn.setEnabled(True)
         self.detect_btn.setEnabled(True)
         
-        print(f"✅ Processing completed! Output saved to: {output_path}")
         
         # Show completion message with option to open output folder
         msg = QMessageBox()
@@ -16817,6 +16616,7 @@ class SilenceCutterApp(QMainWindow):
             
             folder_path = os.path.dirname(output_path)
             try:
+                pass
                 if platform.system() == "Windows":
                     # Use proper list format and normalize path separators
                     normalized_path = os.path.normpath(output_path)
@@ -16829,6 +16629,7 @@ class SilenceCutterApp(QMainWindow):
                 print(f"Error opening folder: {e}")
                 # Fallback: try to open just the folder
                 try:
+                    pass
                     if platform.system() == "Windows":
                         subprocess.Popen(['explorer', folder_path])
                     elif platform.system() == "Darwin":  # macOS
@@ -16876,7 +16677,6 @@ class SilenceCutterApp(QMainWindow):
                 if hasattr(timeline, 'audio_buffer'):
                     timeline.audio_buffer.clear()
             
-            print("🧹 Circular buffers and caches cleared")
         except Exception as e:
             print(f"⚠️ Error cleaning up buffers: {e}")
     
@@ -16885,6 +16685,7 @@ class SilenceCutterApp(QMainWindow):
         stats = {}
         
         try:
+            pass
             if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
                 timeline = self.video_player.timeline_widget
                 
@@ -16910,22 +16711,22 @@ class SilenceCutterApp(QMainWindow):
     def enable_performance_optimizations(self):
         """Enable performance optimizations for smooth playback"""
         try:
+            pass
             if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
                 timeline = self.video_player.timeline_widget
                 timeline.enable_caching()
                 
-            print("⚡ Performance optimizations enabled")
         except Exception as e:
             print(f"⚠️ Error enabling optimizations: {e}")
     
     def disable_performance_optimizations(self):
         """Disable performance optimizations for faster processing"""
         try:
+            pass
             if hasattr(self, 'video_player') and hasattr(self.video_player, 'timeline_widget'):
                 timeline = self.video_player.timeline_widget
                 timeline.disable_caching()
                 
-            print("🔧 Performance optimizations disabled for processing")
         except Exception as e:
             print(f"⚠️ Error disabling optimizations: {e}")
     
@@ -16954,12 +16755,14 @@ class SilenceCutterApp(QMainWindow):
                 
             # Clear transcript widget completely with all its components
             if hasattr(self, 'transcript_widget') and self.transcript_widget:
+                pass
                 try:
                     # Clear all transcript data
                     self.transcript_widget.transcript_data = []
                     if hasattr(self.transcript_widget, 'word_widgets'):
                         # Delete all word widgets
                         for widget in self.transcript_widget.word_widgets:
+                            pass
                             if widget:
                                 widget.deleteLater()
                         self.transcript_widget.word_widgets = []
@@ -16977,6 +16780,7 @@ class SilenceCutterApp(QMainWindow):
                     
                     # Clear transcript layout completely
                     if hasattr(self.transcript_widget, 'transcript_layout'):
+                        pass
                         while self.transcript_widget.transcript_layout.count():
                             item = self.transcript_widget.transcript_layout.takeAt(0)
                             if item and item.widget():
@@ -16990,12 +16794,12 @@ class SilenceCutterApp(QMainWindow):
                     self.transcript_widget.update()
                     self.transcript_widget.repaint()
                     
-                    print("✅ Transcript widget completely cleared")
                 except Exception as e:
                     print(f"⚠️ Error clearing transcript widget: {e}")
             
             # Clear any enhanced transcript widgets
             if hasattr(self, 'enhanced_transcript_widget') and self.enhanced_transcript_widget:
+                pass
                 try:
                     self.enhanced_transcript_widget.transcript_data = []
                     if hasattr(self.enhanced_transcript_widget, 'clear_transcript'):
@@ -17013,6 +16817,7 @@ class SilenceCutterApp(QMainWindow):
                 
                 # Clear video display
                 if hasattr(self.video_player, 'video_widget'):
+                    pass
                     try:
                         # Reset video widget to blank state
                         self.video_player.video_widget.update()
@@ -17132,7 +16937,6 @@ class SilenceCutterApp(QMainWindow):
                         timeline.repaint()
                         QApplication.processEvents()
                         
-                        print("✅ Timeline aggressively force-cleared - all visual artifacts removed")
                     except:
                         pass
                 
@@ -17156,7 +16960,6 @@ class SilenceCutterApp(QMainWindow):
                         timeline.update()
                         timeline.repaint()
                         
-                        print("✅ Timeline ultra-cleared - complete visual reset")
                     except:
                         pass
                 
@@ -17164,7 +16967,6 @@ class SilenceCutterApp(QMainWindow):
                 QTimer.singleShot(100, force_timeline_clear)
                 QTimer.singleShot(300, ultra_timeline_clear)  # Ultra aggressive clearing
                 
-                print("✅ Interactive timeline completely cleared")
             
             # === UI ELEMENTS RESET ===
             if hasattr(self, 'file_label'):
@@ -17201,6 +17003,7 @@ class SilenceCutterApp(QMainWindow):
             
             # Reset batch processing
             if hasattr(self, 'batch_widget') and self.batch_widget:
+                pass
                 try:
                     self.batch_widget.clear_files()
                     self.batch_widget.reset_interface()
@@ -17209,6 +17012,7 @@ class SilenceCutterApp(QMainWindow):
             
             # Clear any resolution optimizer data
             if hasattr(self, 'resolution_optimizer'):
+                pass
                 try:
                     self.resolution_optimizer = None
                 except:
@@ -17232,7 +17036,6 @@ class SilenceCutterApp(QMainWindow):
             import gc
             gc.collect()
             
-            print("✅ Complete interface reset successful - pristine state ready for new file")
             
         except Exception as e:
             print(f"⚠️ Error during complete interface reset: {e}")
@@ -17260,9 +17063,6 @@ class SilenceCutterApp(QMainWindow):
     def resizeEvent(self, event):
         """Handle window resize events"""
         # DEBUG: Log resize events
-        print(f"🔄 MAIN WINDOW RESIZE EVENT:")
-        print(f"  📏 Old size: {event.oldSize()}")
-        print(f"  📏 New size: {event.size()}")
         
         super().resizeEvent(event)
         if self.loading_overlay:
@@ -17291,11 +17091,9 @@ class SilenceCutterApp(QMainWindow):
         # DEBUG: Log video container size after resize
         if hasattr(self, 'video_player') and hasattr(self.video_player, 'video_frame_label'):
             container_widget = self.video_player.video_frame_label.parent()
-            print(f"  🏷️  Video label size after resize: {self.video_player.video_frame_label.size()}")
             print(f"  🏷️  Video label geometry after resize: {self.video_player.video_frame_label.geometry()}")
             if container_widget:
-                print(f"  📦 Video container size after resize: {container_widget.size()}")
-                print(f"  📐 Video container geometry after resize: {container_widget.geometry()}")
+                pass
         print()
         
         # Position fullscreen button in lower right corner of video container
@@ -17669,6 +17467,7 @@ class SilenceCutterApp(QMainWindow):
             for i in range(main_layout.count()):
                 item = main_layout.itemAt(i)
                 if item:
+                    pass
                     if item.layout():
                         # This is the header layout - hide all its widgets
                         header_layout = item.layout()
@@ -17729,8 +17528,6 @@ class SilenceCutterApp(QMainWindow):
                     video_frame_label = self.video_player.video_frame_label
                     print(f"        🎬 Found video frame label in self.video_player")
                     print(f"        📏 Video section size: {video_section.size()}")
-                    print(f"        🏷️  Video frame label size before: {video_frame_label.size()}")
-                    print(f"        👁️  Video frame label visible: {video_frame_label.isVisible()}")
                     
                     video_frame_label.show()
                     
@@ -17753,8 +17550,6 @@ class SilenceCutterApp(QMainWindow):
                     video_frame_label.setFixedSize(fullscreen_size)
                     video_frame_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
                     
-                    print(f"        🏷️  Video frame label size after: {video_frame_label.size()}")
-                    print(f"        📐 Video frame label geometry: {video_frame_label.geometry()}")
                     
                     # Step 5: Ensure the video frame label is visible and on top
                     video_frame_label.show()
@@ -17768,9 +17563,7 @@ class SilenceCutterApp(QMainWindow):
                             # Scale the current frame to fullscreen size
                             fullscreen_pixmap = current_pixmap.scaled(fullscreen_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                             video_frame_label.setPixmap(fullscreen_pixmap)
-                            print(f"        🖼️  Rescaled current frame to fullscreen: {fullscreen_pixmap.size()}")
                     
-                    print(f"        ✅ Video frame label configured for fullscreen")
                 else:
                     print(f"      ❌ No video_player.video_frame_label found!")
             else:
@@ -17844,12 +17637,10 @@ class SilenceCutterApp(QMainWindow):
                         # Scale the current frame to windowed size
                         windowed_pixmap = current_pixmap.scaled(windowed_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                         video_frame_label.setPixmap(windowed_pixmap)
-                        print(f"      🖼️  Rescaled current frame to windowed: {windowed_pixmap.size()}")
                 
                 # Step 10: Final repaint
                 video_frame_label.repaint()
                 
-                print(f"      ✅ Video frame label restored to windowed mode")
             else:
                 print(f"    ❌ No video_player.video_frame_label found for restoration!")
         else:
@@ -17861,6 +17652,7 @@ class SilenceCutterApp(QMainWindow):
         """Handle keyboard shortcuts"""
         # Check for modifier combinations first
         if event.modifiers() == Qt.ControlModifier:
+            pass
             if event.key() == Qt.Key_O:
                 # Ctrl+O: Open file
                 self.select_video()
@@ -17904,6 +17696,7 @@ class SilenceCutterApp(QMainWindow):
         )
         
         if reply == QMessageBox.Yes:
+            pass
             try:
                 # Perform complete application reset
                 self.clear_previous_data()
@@ -17946,7 +17739,6 @@ class SilenceCutterApp(QMainWindow):
                 self.update()
                 self.repaint()
                 
-                print("✅ New project created - application completely reset")
                 
                 # Show success message
                 QMessageBox.information(
@@ -17967,8 +17759,11 @@ class SilenceCutterApp(QMainWindow):
 def cleanup_temp_files():
     temp_dir = tempfile.gettempdir()
     try:
+        pass
         for filename in os.listdir(temp_dir):
+            pass
             if filename.startswith("temp-audio-") and (filename.endswith(".m4a") or filename.endswith(".wav")):
+                pass
                 try:
                     os.unlink(os.path.join(temp_dir, filename))
                 except:

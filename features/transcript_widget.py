@@ -22,7 +22,6 @@ try:
     FAST_TRANSCRIPT_AVAILABLE = True
 except ImportError:
     FAST_TRANSCRIPT_AVAILABLE = False
-    print("⚠️  Fast transcript generator not available")
 
 class TranscriptWidget(QWidget):
     """Enhanced transcript widget with fast generation and timeline sync"""
@@ -275,7 +274,6 @@ class TranscriptWidget(QWidget):
         """Handle word click - seek to that time"""
         seek_time = word_data['start']
         self.seek_requested.emit(seek_time)
-        print(f"🎯 Seeking to word '{word_data['word']}' at {seek_time:.2f}s")
         
     def update_current_time(self, time_seconds):
         """Update current playback time and highlight current word"""
@@ -347,9 +345,8 @@ def integrate_transcript_with_timeline(timeline_widget, transcript_widget):
     """Integrate transcript widget with timeline for synchronized highlighting"""
     if hasattr(timeline_widget, 'position_changed'):
         timeline_widget.position_changed.connect(transcript_widget.update_current_time)
-        print("✅ Transcript synchronized with timeline")
     else:
-        print("⚠️  Timeline position signal not available")
+        pass
 
 # Export main classes
 __all__ = ['TranscriptWidget', 'integrate_transcript_with_timeline'] 

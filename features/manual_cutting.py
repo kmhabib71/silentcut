@@ -43,7 +43,6 @@ class ManualCuttingManager(QObject):
         """Start manual selection at current playhead position"""
         self.selection_start_time = playhead_position
         self.is_selecting = True
-        print(f"🎯 Manual cutting: Started selection at {playhead_position:.3f}s")
         
     def preview_selection(self, current_position):
         """Preview the selection area (for visual feedback)"""
@@ -73,7 +72,6 @@ class ManualCuttingManager(QObject):
         
         # Minimum cut duration of 0.1 seconds
         if end_time - start_time < 0.1:
-            print(f"⚠️  Manual cutting: Selection too short ({end_time - start_time:.3f}s), minimum 0.1s required")
             self.cancel_selection()
             return False
             
@@ -91,7 +89,6 @@ class ManualCuttingManager(QObject):
         self.manual_cuts.append(manual_cut)
         self.manual_cut_ranges.append((int(start_time * 1000), int(end_time * 1000)))
         
-        print(f"✂️  Manual cutting: Created cut from {start_time:.3f}s to {end_time:.3f}s ({manual_cut['duration_ms']}ms)")
         
         # Reset selection state
         self.is_selecting = False
@@ -118,7 +115,6 @@ class ManualCuttingManager(QObject):
         selected_cuts = [cut for cut in self.manual_cuts if cut.get('selected', False)]
         
         if not selected_cuts:
-            print("⚠️  Manual cutting: No manual cuts selected for cutting")
             return False
             
         # Remove selected cuts
@@ -134,7 +130,6 @@ class ManualCuttingManager(QObject):
                     self.manual_cut_ranges.pop(i)
                     
                 removed_cuts.append(removed_cut)
-                print(f"✂️  Manual cutting: Removed cut {removed_cut['start']:.3f}s - {removed_cut['end']:.3f}s")
                 
                 # Emit removal signal
                 self.manual_cut_removed.emit(removed_cut)
@@ -146,14 +141,12 @@ class ManualCuttingManager(QObject):
         # Emit changes signal
         self.manual_cuts_changed.emit(self.manual_cuts)
         
-        print(f"✂️  Manual cutting: Removed {len(removed_cuts)} manual cuts")
         return len(removed_cuts) > 0
         
     def toggle_cut_selection(self, cut_index):
         """Toggle selection state of a manual cut"""
         if 0 <= cut_index < len(self.manual_cuts):
             self.manual_cuts[cut_index]['selected'] = not self.manual_cuts[cut_index]['selected']
-            print(f"🎯 Manual cutting: Toggled cut {cut_index} selection to {self.manual_cuts[cut_index]['selected']}")
             return True
         return False
         
@@ -161,20 +154,17 @@ class ManualCuttingManager(QObject):
         """Select all manual cuts"""
         for cut in self.manual_cuts:
             cut['selected'] = True
-        print(f"🎯 Manual cutting: Selected all {len(self.manual_cuts)} manual cuts")
         self.manual_cuts_changed.emit(self.manual_cuts)
         
     def deselect_all_cuts(self):
         """Deselect all manual cuts"""
         for cut in self.manual_cuts:
             cut['selected'] = False
-        print(f"🎯 Manual cutting: Deselected all manual cuts")
         self.manual_cuts_changed.emit(self.manual_cuts)
         
     def clear_all_cuts(self):
         """Clear all manual cuts"""
         if self.manual_cuts:
-            print(f"🗑️  Manual cutting: Clearing {len(self.manual_cuts)} manual cuts")
             self.manual_cuts.clear()
             self.manual_cut_ranges.clear()
             self.manual_cuts_changed.emit(self.manual_cuts)
@@ -217,7 +207,6 @@ class ManualCuttingManager(QObject):
         # Sort by start time
         combined_cuts.sort(key=lambda x: x['start'])
         
-        print(f"🔄 Manual cutting: Combined {len([c for c in combined_cuts if c['type'] == 'manual_cut'])} manual cuts + {len([c for c in combined_cuts if c['type'] == 'silence'])} silence regions")
         
         return combined_cuts
         
@@ -330,7 +319,6 @@ class ManualCuttingIntegration:
                                 removed_cut = manual_cutting_manager.manual_cuts.pop(i)
                                 if i < len(manual_cutting_manager.manual_cut_ranges):
                                     manual_cutting_manager.manual_cut_ranges.pop(i)
-                                print(f"🔄 Removed overlapping manual cut: {removed_cut['start']:.3f}s - {removed_cut['end']:.3f}s")
                             
                             # Update IDs for remaining cuts
                             for i, cut in enumerate(manual_cutting_manager.manual_cuts):
@@ -350,7 +338,6 @@ class ManualCuttingIntegration:
                             manual_cutting_manager.manual_cuts.append(manual_cut)
                             manual_cutting_manager.manual_cut_ranges.append((int(start_time * 1000), int(end_time * 1000)))
                             
-                            print(f"✂️  Manual cut created: {start_time:.3f}s - {end_time:.3f}s")
                             
                             # Emit signals
                             manual_cutting_manager.manual_cut_added.emit(manual_cut)
@@ -364,7 +351,7 @@ class ManualCuttingIntegration:
                                 if hasattr(main_app, 'update_export_button_state'):
                                     main_app.update_export_button_state()
                         else:
-                            print("⚠️  Manual cutting: Selection too short (minimum 0.1 seconds)")
+                            pass
                         
                         event.accept()
                         return
@@ -397,7 +384,6 @@ class ManualCuttingIntegration:
                                 for i, cut in enumerate(manual_cutting_manager.manual_cuts):
                                     cut['id'] = i
                                 
-                                print(f"🗑️  Removed manual cut: {removed_cut['start']:.3f}s - {removed_cut['end']:.3f}s")
                                 
                                 # Emit signals
                                 manual_cutting_manager.manual_cut_removed.emit(removed_cut)
@@ -449,7 +435,6 @@ class ManualCuttingIntegration:
                                         if hasattr(timeline_widget, 'set_preview_mode'):
                                             timeline_widget.set_preview_mode(False)
                                     
-                                    print(f"🔄 Preview updated after removal: {len(combined_cuts)} total cuts")
                                 
                                 # Update export button
                                 if hasattr(timeline_widget, 'parent') and hasattr(timeline_widget.parent(), 'parent'):
@@ -519,7 +504,6 @@ class ManualCuttingIntegration:
                             if hasattr(timeline_widget, 'set_preview_mode'):
                                 timeline_widget.set_preview_mode(False)
                         
-                        print(f"🔄 Preview mode updated: {len(combined_cuts)} total cuts (silence + manual)")
                     
                     # Update export button state
                     if hasattr(timeline_widget, 'parent') and hasattr(timeline_widget.parent(), 'parent'):
@@ -527,7 +511,6 @@ class ManualCuttingIntegration:
                         if hasattr(main_app, 'update_export_button_state'):
                             main_app.update_export_button_state()
                             
-                    print("✂️  Manual cuts removed and preview updated")
                 event.accept()
                 return
                 
@@ -590,7 +573,6 @@ class ManualCuttingIntegration:
                     # Update timeline preview mode
                     if hasattr(timeline_widget, 'set_preview_mode'):
                         timeline_widget.set_preview_mode(True, combined_cuts)
-                    print(f"🔄 Preview updated: {len(combined_cuts)} total cuts (silence + manual)")
                 else:
                     # No cuts, disable preview
                     if hasattr(video_player, 'set_preview_mode'):
@@ -602,7 +584,6 @@ class ManualCuttingIntegration:
         manual_cutting_manager.manual_cut_added.connect(update_preview_on_manual_cut_change)
         manual_cutting_manager.manual_cuts_changed.connect(update_preview_on_manual_cut_change)
         
-        print("✅ Manual cutting integrated with timeline widget")
         
     @staticmethod
     def draw_manual_cuts(timeline_widget, paint_event):
@@ -695,7 +676,6 @@ class ManualCuttingIntegration:
         # Replace method
         video_player.keyPressEvent = enhanced_keyPressEvent
         
-        print("✅ Manual cutting integrated with video player")
         
     @staticmethod
     def integrate_with_processing(processing_thread_class, manual_cutting_manager):
@@ -713,7 +693,6 @@ class ManualCuttingIntegration:
                 # Update silent_parts to include manual cuts
                 self.silent_parts = combined_cuts
                 
-                print(f"🔄 Processing: Including {len([c for c in combined_cuts if c.get('type') == 'manual_cut'])} manual cuts in processing")
             
             # Call original run method
             return original_run(self)
@@ -721,4 +700,3 @@ class ManualCuttingIntegration:
         # Replace run method
         processing_thread_class.run = enhanced_run
         
-        print("✅ Manual cutting integrated with processing") 
