@@ -68,7 +68,7 @@ jobs:
               $chocoSuccess = $true
             }
           } catch {
-            echo "⚠️ Chocolatey installation failed, using direct download..."
+            echo "⚠️ Chocolatey installation failed: $($_.Exception.Message)"
           }
 
           # If Chocolatey failed, use direct download
@@ -103,7 +103,26 @@ jobs:
             }
           }
 
-          echo "✅ System dependencies setup completed"
+          # Verify Visual C++ Redistributable installation
+          echo "🔍 Verifying Visual C++ Redistributable installation..."
+          try {
+            $vcRedistCheck = reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64" /v Version 2>$null
+            if ($LASTEXITCODE -eq 0) {
+              echo "✅ Visual C++ 2015 Redistributable verified"
+            } else {
+              $vcRedistCheck = reg query "HKLM\SOFTWARE\Microsoft\VisualStudio\VC\Runtimes\x64" /v Version 2>$null
+              if ($LASTEXITCODE -eq 0) {
+                echo "✅ Visual C++ Redistributable verified"
+              } else {
+                echo "⚠️ Visual C++ Redistributable registry entry not found"
+                echo "   This may not affect the build if runtime is available"
+              }
+            }
+          } catch {
+            echo "⚠️ Could not verify Visual C++ installation, but continuing build"
+          }
+
+          echo "✅ System dependencies setup completed successfully"
 
       - name: Install build tools
         run: |

@@ -73,6 +73,14 @@ This project uses GitHub Actions for automated building and distribution:
 - **Standard Release**: Full production builds with protection
 - **Secure Release**: Enhanced security builds with integrity verification
 
+### System Requirements for Building
+
+The automated build process requires:
+
+- **Windows runners**: Visual C++ Redistributable (automatically installed)
+- **Python 3.9**: For application runtime and dependencies
+- **Build tools**: PyInstaller, Nuitka, PyArmor (automatically installed)
+
 ### Creating a Release
 
 ```bash
