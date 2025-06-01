@@ -12,24 +12,24 @@ from PyQt5.QtGui import QFont
 
 class RepeatedWordPreviewDialog(QDialog):
     """Dialog to preview and select repeated words for removal"""
-    
+
     segments_selected = pyqtSignal(list)  # Emits selected segments for removal
-    
+
     def __init__(self, analysis_result, parent=None):
         super().__init__(parent)
         self.analysis_result = analysis_result
         self.selected_segments = []
         self.setup_ui()
         self.populate_list()
-        
+
     def setup_ui(self):
         """Set up the preview dialog UI"""
         self.setWindowTitle("Repeated Words & Phrases Preview")
         self.setModal(True)
         self.resize(800, 600)
-        
+
         layout = QVBoxLayout()
-        
+
         # Header
         header_label = QLabel("🔍 Repeated Words & Phrases Detection")
         header_label.setStyleSheet("""
@@ -43,12 +43,12 @@ class RepeatedWordPreviewDialog(QDialog):
                 margin-bottom: 8px;
             }
         """)
-        
+
         # Statistics
         repeated_count = len(self.analysis_result['repeated_words'])
         phrase_count = len(self.analysis_result['repeated_phrases'])
         total_time = self.analysis_result['total_repeated_time']
-        
+
         stats_label = QLabel(
             f"Found {repeated_count} repeated words and {phrase_count} repeated phrases. "
             f"Total potential time savings: {total_time:.1f} seconds"
@@ -63,7 +63,7 @@ class RepeatedWordPreviewDialog(QDialog):
                 margin-bottom: 8px;
             }
         """)
-        
+
         # Instructions
         instructions_label = QLabel(
             "Select the repeated words/phrases you want to remove. "
@@ -77,7 +77,7 @@ class RepeatedWordPreviewDialog(QDialog):
                 margin-bottom: 8px;
             }
         """)
-        
+
         # List widget for repeated items
         self.items_list = QListWidget()
         self.items_list.setStyleSheet("""
@@ -103,10 +103,10 @@ class RepeatedWordPreviewDialog(QDialog):
                 color: white;
             }
         """)
-        
+
         # Control buttons
         controls_layout = QHBoxLayout()
-        
+
         select_all_btn = QPushButton("Select All")
         select_all_btn.setStyleSheet("""
             QPushButton {
@@ -121,7 +121,7 @@ class RepeatedWordPreviewDialog(QDialog):
             }
         """)
         select_all_btn.clicked.connect(self.select_all_items)
-        
+
         select_none_btn = QPushButton("Select None")
         select_none_btn.setStyleSheet("""
             QPushButton {
@@ -136,14 +136,14 @@ class RepeatedWordPreviewDialog(QDialog):
             }
         """)
         select_none_btn.clicked.connect(self.select_no_items)
-        
+
         controls_layout.addWidget(select_all_btn)
         controls_layout.addWidget(select_none_btn)
         controls_layout.addStretch()
-        
+
         # Action buttons
         action_layout = QHBoxLayout()
-        
+
         preview_btn = QPushButton("🎬 Preview Removal")
         preview_btn.setStyleSheet("""
             QPushButton {
@@ -159,7 +159,7 @@ class RepeatedWordPreviewDialog(QDialog):
             }
         """)
         preview_btn.clicked.connect(self.preview_removal)
-        
+
         apply_btn = QPushButton("✂️ Apply Removal")
         apply_btn.setStyleSheet("""
             QPushButton {
@@ -175,7 +175,7 @@ class RepeatedWordPreviewDialog(QDialog):
             }
         """)
         apply_btn.clicked.connect(self.apply_removal)
-        
+
         cancel_btn = QPushButton("Cancel")
         cancel_btn.setStyleSheet("""
             QPushButton {
@@ -191,12 +191,12 @@ class RepeatedWordPreviewDialog(QDialog):
             }
         """)
         cancel_btn.clicked.connect(self.reject)
-        
+
         action_layout.addWidget(preview_btn)
         action_layout.addWidget(apply_btn)
         action_layout.addStretch()
         action_layout.addWidget(cancel_btn)
-        
+
         # Add all widgets to layout
         layout.addWidget(header_label)
         layout.addWidget(stats_label)
@@ -204,9 +204,9 @@ class RepeatedWordPreviewDialog(QDialog):
         layout.addWidget(self.items_list, 1)
         layout.addLayout(controls_layout)
         layout.addLayout(action_layout)
-        
+
         self.setLayout(layout)
-        
+
     def populate_list(self):
         """Populate the list with repeated words and phrases"""
         # Sort candidates by potential time savings
@@ -215,47 +215,47 @@ class RepeatedWordPreviewDialog(QDialog):
             key=lambda x: x['duration'] * x['count'],
             reverse=True
         )
-        
+
         for candidate in candidates:
             if candidate['count'] > 2:  # Only show significantly repeated items
                 # Create list item
                 item_text = f"{candidate['text']} ({candidate['type']})"
                 detail_text = f"Repeated {candidate['count']} times • {candidate['duration']:.1f}s each • Total savings: {candidate['duration'] * (candidate['count'] - 1):.1f}s"
-                
+
                 item = QListWidgetItem()
                 item.setText(f"{item_text}\n{detail_text}")
                 item.setData(Qt.UserRole, candidate)
                 item.setCheckState(Qt.Unchecked)
-                
+
                 # Color code by type
                 if candidate['type'] == 'word':
                     item.setBackground(Qt.darkBlue)
                 else:
                     item.setBackground(Qt.darkGreen)
-                
+
                 self.items_list.addItem(item)
-                
+
     def select_all_items(self):
         """Select all items in the list"""
         for i in range(self.items_list.count()):
             item = self.items_list.item(i)
             item.setCheckState(Qt.Checked)
-            
+
     def select_no_items(self):
         """Deselect all items in the list"""
         for i in range(self.items_list.count()):
             item = self.items_list.item(i)
             item.setCheckState(Qt.Unchecked)
-            
+
     def get_selected_segments(self):
         """Get segments for selected repeated words/phrases"""
         segments = []
-        
+
         for i in range(self.items_list.count()):
             item = self.items_list.item(i)
             if item.checkState() == Qt.Checked:
                 candidate = item.data(Qt.UserRole)
-                
+
                 # Create segment for removal (skip first occurrence)
                 segments.append({
                     'start': candidate['start'],
@@ -265,43 +265,43 @@ class RepeatedWordPreviewDialog(QDialog):
                     'duration': candidate['duration'],
                     'selected': True
                 })
-                
+
         return segments
-        
+
     def preview_removal(self):
         """Preview the removal (similar to silence detection preview)"""
         segments = self.get_selected_segments()
         if not segments:
             return
-            
+
         # Emit segments for preview
         self.segments_selected.emit(segments)
-        
+
     def apply_removal(self):
         """Apply the removal and close dialog"""
         segments = self.get_selected_segments()
         if not segments:
             self.reject()
             return
-            
+
         self.selected_segments = segments
         self.accept()
 
 def integrate_repeated_words_with_app(app_instance):
     """Integrate repeated word detection with the main application"""
-    
+
     def on_repeated_words_detected(analysis_result):
         """Handle repeated words detection from transcript"""
         try:
             # Show preview dialog
             dialog = RepeatedWordPreviewDialog(analysis_result, app_instance)
-            
+
             # Connect preview signal to existing preview functionality
             if hasattr(app_instance, 'apply_repeated_words_preview'):
                 dialog.segments_selected.connect(
                     lambda segments: app_instance.apply_repeated_words_preview(segments)
                 )
-            
+
             # Show dialog
             if dialog.exec_() == QDialog.Accepted:
                 segments = dialog.selected_segments
@@ -311,18 +311,18 @@ def integrate_repeated_words_with_app(app_instance):
                         app_instance.apply_repeated_words_removal(segments)
                     else:
                         pass
-                        
+
         except Exception as e:
             print(f"❌ Failed to handle repeated words detection: {e}")
-    
+
     # Store the handler function
     app_instance.on_repeated_words_detected = on_repeated_words_detected
-    
+
 
 def add_repeated_words_to_silence_segments(silence_segments, repeated_word_segments):
     """Combine silence segments with repeated word segments for unified processing"""
     combined_segments = []
-    
+
     # Add silence segments
     for segment in silence_segments:
         combined_segments.append({
@@ -332,7 +332,7 @@ def add_repeated_words_to_silence_segments(silence_segments, repeated_word_segme
             'duration': segment['end'] - segment['start'],
             'selected': segment.get('selected', False)
         })
-    
+
     # Add repeated word segments
     for segment in repeated_word_segments:
         combined_segments.append({
@@ -343,11 +343,11 @@ def add_repeated_words_to_silence_segments(silence_segments, repeated_word_segme
             'duration': segment['duration'],
             'selected': segment.get('selected', False)
         })
-    
+
     # Sort by start time
     combined_segments.sort(key=lambda x: x['start'])
-    
+
     return combined_segments
 
 # Export main functions
-__all__ = ['RepeatedWordPreviewDialog', 'integrate_repeated_words_with_app', 'add_repeated_words_to_silence_segments'] 
+__all__ = ['RepeatedWordPreviewDialog', 'integrate_repeated_words_with_app', 'add_repeated_words_to_silence_segments']

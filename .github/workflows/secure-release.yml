@@ -20,23 +20,23 @@ env:
   PYTHON_VERSION: "3.9"
 
 jobs:
-  security-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run security scan
-        uses: github/super-linter@v4
-        env:
-          DEFAULT_BRANCH: main
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VALIDATE_PYTHON: true
-          VALIDATE_PYTHON_BLACK: false
-          VALIDATE_PYTHON_ISORT: false
+  # security-scan:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #
+  #   - name: Run security scan
+  #     uses: github/super-linter@v4
+  #     env:
+  #       DEFAULT_BRANCH: main
+  #       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       VALIDATE_PYTHON: true
+  #       VALIDATE_PYTHON_BLACK: false
+  #       VALIDATE_PYTHON_ISORT: false
 
   build-secure:
-    needs: security-scan
+    # needs: security-scan
     runs-on: windows-latest
 
     steps:

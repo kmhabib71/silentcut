@@ -18,14 +18,14 @@ except ImportError:
     SPEECH_RECOGNITION_AVAILABLE = False
 
 if BATCH_PROCESSING_AVAILABLE and SPEECH_RECOGNITION_AVAILABLE:
-    __all__ = ['ManualCuttingManager', 'ManualCuttingIntegration', 'BatchProcessingManager', 
-               'BatchProcessingDialog', 'BatchProcessingIntegration', 'SpeechRecognitionManager', 
+    __all__ = ['ManualCuttingManager', 'ManualCuttingIntegration', 'BatchProcessingManager',
+               'BatchProcessingDialog', 'BatchProcessingIntegration', 'SpeechRecognitionManager',
                'integrate_speech_recognition']
 elif BATCH_PROCESSING_AVAILABLE:
-    __all__ = ['ManualCuttingManager', 'ManualCuttingIntegration', 'BatchProcessingManager', 
+    __all__ = ['ManualCuttingManager', 'ManualCuttingIntegration', 'BatchProcessingManager',
                'BatchProcessingDialog', 'BatchProcessingIntegration']
 elif SPEECH_RECOGNITION_AVAILABLE:
-    __all__ = ['ManualCuttingManager', 'ManualCuttingIntegration', 'SpeechRecognitionManager', 
+    __all__ = ['ManualCuttingManager', 'ManualCuttingIntegration', 'SpeechRecognitionManager',
                'integrate_speech_recognition']
 else:
     __all__ = ['ManualCuttingManager', 'ManualCuttingIntegration']
