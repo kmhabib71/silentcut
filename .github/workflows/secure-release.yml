@@ -15,6 +15,13 @@ on:
         type: boolean
         default: false
 
+# Add explicit permissions for the workflow
+permissions:
+  contents: write
+  packages: write
+  actions: read
+  security-events: write
+
 env:
   APP_NAME: SilentCutComplete
   PYTHON_VERSION: "3.9"
@@ -539,6 +546,12 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
+    # Explicit permissions for release creation
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -549,8 +562,20 @@ jobs:
           pattern: "*_Secure_Release"
           merge-multiple: true
 
+      - name: Debug token and permissions
+        run: |
+          echo "GitHub Actor: ${{ github.actor }}"
+          echo "GitHub Repository: ${{ github.repository }}"
+          echo "GitHub Ref: ${{ github.ref }}"
+          echo "Event Name: ${{ github.event_name }}"
+          if [ -n "${{ secrets.GITHUB_TOKEN }}" ]; then
+            echo "✅ GITHUB_TOKEN is available"
+          else
+            echo "❌ GITHUB_TOKEN is missing"
+          fi
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             *.zip
@@ -560,5 +585,4 @@ jobs:
           prerelease: ${{ github.event.inputs.prerelease == 'true' || contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
           generate_release_notes: true
           tag_name: ${{ github.event.inputs.version && format('v{0}', github.event.inputs.version) || github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
