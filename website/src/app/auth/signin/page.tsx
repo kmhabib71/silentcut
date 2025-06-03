@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signIn, getSession } from "next-auth/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, Zap } from "lucide-react";
 
@@ -14,6 +14,11 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Get device and session parameters from URL
+  const deviceId = searchParams.get("device");
+  const sessionId = searchParams.get("session");
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,15 +26,19 @@ export default function SignInPage() {
     setError("");
 
     try {
+      // Include device information in the signin request
       const result = await signIn("credentials", {
         email,
         password,
+        deviceId,
+        sessionId,
         redirect: false,
       });
 
       if (result?.error) {
         setError("Invalid email or password");
       } else {
+        // Redirect to dashboard or back to the app
         router.push("/dashboard");
       }
     } catch (error) {
@@ -42,7 +51,11 @@ export default function SignInPage() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
-      await signIn("google", { callbackUrl: "/dashboard" });
+      // Include device parameters in Google signin
+      const callbackUrl = `/dashboard${
+        deviceId && sessionId ? `?device=${deviceId}&session=${sessionId}` : ""
+      }`;
+      await signIn("google", { callbackUrl });
     } catch (error) {
       setError("Google sign-in failed. Please try again.");
       setIsLoading(false);
@@ -68,6 +81,18 @@ export default function SignInPage() {
 
           <h2 className="text-3xl font-bold text-white mb-2">Welcome back</h2>
           <p className="text-gray-300">Sign in to your account to continue</p>
+
+          {/* Show device info if coming from app */}
+          {deviceId && (
+            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <p className="text-blue-400 text-sm">
+                🔗 Linking your anonymous usage to your account
+              </p>
+              <p className="text-gray-400 text-xs">
+                Device: {deviceId.slice(0, 8)}...
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Sign In Form */}
@@ -214,7 +239,11 @@ export default function SignInPage() {
             <p className="text-gray-300">
               Don't have an account?{" "}
               <Link
-                href="/auth/signup"
+                href={`/auth/signup${
+                  deviceId && sessionId
+                    ? `?device=${deviceId}&session=${sessionId}`
+                    : ""
+                }`}
                 className="text-purple-400 hover:text-purple-300 font-medium"
               >
                 Sign up for free

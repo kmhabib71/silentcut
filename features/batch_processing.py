@@ -929,6 +929,122 @@ class BatchProcessingDialog(QDialog):
             QMessageBox.warning(self, "Missing Classes", "Processing classes not properly initialized.")
             return
 
+        # Check usage limits before starting batch processing
+        try:
+            from features.api_communication import api_client
+            API_COMMUNICATION_AVAILABLE = True
+        except ImportError:
+            API_COMMUNICATION_AVAILABLE = False
+        
+        if API_COMMUNICATION_AVAILABLE:
+            try:
+                # Calculate total duration of all files in batch
+                total_duration_minutes = 0
+                
+                for item in self.batch_manager.batch_queue:
+                    file_path = item['path']
+                    file_duration = 1  # Default fallback
+                    
+                    try:
+                        # Method 1: Try FFprobe if available
+                        import subprocess
+                        result = subprocess.run([
+                            'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+                            '-of', 'csv=p=0', file_path
+                        ], capture_output=True, text=True, timeout=10)
+                        
+                        if result.returncode == 0 and result.stdout.strip():
+                            duration_seconds = float(result.stdout.strip())
+                            file_duration = duration_seconds / 60
+                        else:
+                            raise Exception("FFprobe failed")
+                            
+                    except Exception:
+                        try:
+                            # Method 2: Try MoviePy if available
+                            from moviepy.editor import VideoFileClip, AudioFileClip
+                            import os
+                            
+                            # Check if it's an audio file
+                            audio_extensions = {'.mp3', '.wav', '.aac', '.flac', '.ogg', '.m4a', '.wma'}
+                            is_audio = os.path.splitext(file_path)[1].lower() in audio_extensions
+                            
+                            if is_audio:
+                                with AudioFileClip(file_path) as clip:
+                                    file_duration = clip.duration / 60
+                            else:
+                                with VideoFileClip(file_path) as clip:
+                                    file_duration = clip.duration / 60
+                                    
+                        except Exception:
+                            # Method 3: Conservative file size estimate
+                            try:
+                                file_size_bytes = os.path.getsize(file_path)
+                                file_size_mb = file_size_bytes / (1024 * 1024)
+                                file_duration = max(0.1, min(file_size_mb / 25, 10))  # Cap at 10 minutes
+                            except Exception:
+                                file_duration = 1  # Safe fallback
+                    
+                    total_duration_minutes += file_duration
+                
+                print(f"🎬 Batch processing total duration: {total_duration_minutes:.2f} minutes")
+                
+                # Validate usage before processing
+                validation_result = api_client.validate_file_usage(
+                    file_duration_minutes=total_duration_minutes
+                )
+                
+                if not validation_result.get('allowed', False):
+                    message = validation_result.get('message', 'Usage limit exceeded')
+                    remaining = validation_result.get('remainingMinutes', 0)
+                    
+                    # Create upgrade message with specific details
+                    upgrade_message = f"Batch Processing - {message}\n\n"
+                    upgrade_message += f"Total batch duration: {total_duration_minutes:.1f} minutes\n"
+                    if remaining > 0:
+                        upgrade_message += f"You have {remaining:.1f} minutes remaining this month.\n"
+                    else:
+                        upgrade_message += "You have reached your monthly limit.\n"
+                    
+                    upgrade_message += "\nUpgrade to a paid plan for unlimited batch processing!"
+                    
+                    # Show usage limit dialog
+                    msg_box = QMessageBox()
+                    msg_box.setIcon(QMessageBox.Warning)
+                    msg_box.setWindowTitle("Batch Processing - Usage Limit Exceeded")
+                    msg_box.setText(upgrade_message)
+                    
+                    # Add upgrade button
+                    upgrade_btn = msg_box.addButton("🚀 Upgrade Now", QMessageBox.ActionRole)
+                    cancel_btn = msg_box.addButton("Cancel", QMessageBox.RejectRole)
+                    msg_box.setDefaultButton(upgrade_btn)
+                    
+                    result = msg_box.exec_()
+                    
+                    # Open upgrade page if user clicks upgrade
+                    if msg_box.clickedButton() == upgrade_btn:
+                        import webbrowser
+                        try:
+                            webbrowser.open("http://localhost:3000/pricing")
+                        except Exception:
+                            webbrowser.open("https://silencecutter.com/pricing")
+                    
+                    return  # Stop batch processing
+                    
+                print(f"✅ Batch processing usage validation passed: {validation_result.get('message', 'OK')}")
+                
+            except Exception as e:
+                print(f"⚠️ Batch processing usage validation failed: {e}")
+                # Show warning but allow processing in offline mode
+                msg_box = QMessageBox()
+                msg_box.setIcon(QMessageBox.Warning) 
+                msg_box.setWindowTitle("Batch Processing - Offline Mode")
+                msg_box.setText("Unable to verify usage limits (offline mode).\n\nBatch processing will continue but may not count towards your quota until you're back online.")
+                msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+                
+                if msg_box.exec_() == QMessageBox.Cancel:
+                    return
+
         # Update settings from UI
         self.update_settings_from_ui()
 

@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
+import AnonymousSession from "@/models/AnonymousSession";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, sessionId } = await request.json();
+    const { email, password, sessionId, deviceId, permanentId } =
+      await request.json();
 
-    if (!email || !password || !sessionId) {
+    if (!email || !password) {
       return NextResponse.json(
-        { error: "Missing required parameters" },
+        { error: "Email and password are required" },
         { status: 400 }
       );
     }
@@ -45,25 +47,91 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Link anonymous usage to the user account if device info provided
+    if (deviceId || sessionId || permanentId) {
+      try {
+        const deviceIdentifier = deviceId || permanentId;
+
+        // Find anonymous sessions associated with this device
+        const anonymousSessionsToLink = await AnonymousSession.find({
+          $or: [
+            { sessionId: deviceIdentifier }, // Device-based session
+            { sessionId: sessionId }, // Specific session
+            { "deviceInfo.permanentId": deviceIdentifier }, // Device info match
+          ],
+          syncedToUser: { $exists: false }, // Only link sessions not already linked
+        });
+
+        if (anonymousSessionsToLink.length > 0) {
+          // Update anonymous sessions to link them to the user
+          await AnonymousSession.updateMany(
+            {
+              $or: [
+                { sessionId: deviceIdentifier },
+                { sessionId: sessionId },
+                { "deviceInfo.permanentId": deviceIdentifier },
+              ],
+              syncedToUser: { $exists: false },
+            },
+            {
+              $set: {
+                syncedToUser: user._id.toString(),
+                "deviceInfo.linkedEmail": email.toLowerCase(),
+              },
+            }
+          );
+
+          // Calculate total anonymous usage to add to user's usage
+          const totalAnonymousMinutes = anonymousSessionsToLink.reduce(
+            (sum, session) => sum + (session.totalMinutesUsed || 0),
+            0
+          );
+
+          // Update user's usage with anonymous usage
+          if (totalAnonymousMinutes > 0) {
+            await User.findByIdAndUpdate(user._id, {
+              $inc: {
+                "usage.totalMinutesUsed": totalAnonymousMinutes,
+              },
+            });
+          }
+
+          console.log(
+            `✅ Linked ${
+              anonymousSessionsToLink.length
+            } anonymous sessions (${totalAnonymousMinutes.toFixed(
+              1
+            )} minutes) to existing user: ${email}`
+          );
+        }
+      } catch (linkError) {
+        console.error("Error linking anonymous usage during login:", linkError);
+        // Don't fail the login if linking fails
+      }
+    }
+
+    // Get updated user data after potential usage linking
+    const updatedUser = await User.findById(user._id);
+
     // Return user information
     return NextResponse.json({
       success: true,
       message: "Authentication successful",
       user: {
-        id: user._id.toString(),
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-        subscription: user.subscription,
+        id: updatedUser._id.toString(),
+        email: updatedUser.email,
+        name: updatedUser.name,
+        avatar: updatedUser.avatar,
+        subscription: updatedUser.subscription,
         usage: {
           currentMonth:
-            user.usage.monthlyUsage.find(
+            updatedUser.usage.monthlyUsage.find(
               (usage: any) =>
                 usage.month === new Date().toISOString().slice(0, 7)
             )?.minutes || 0,
-          totalMinutes: user.usage.totalMinutesUsed,
+          totalMinutes: updatedUser.usage.totalMinutesUsed,
         },
-        isAdmin: user.isAdmin,
+        isAdmin: updatedUser.isAdmin,
       },
     });
   } catch (error) {

@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import connectToDatabase from "@/lib/mongodb";
 import User from "@/models/User";
+import AnonymousSession from "@/models/AnonymousSession";
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password } = await request.json();
+    const { name, email, password, deviceId, sessionId } = await request.json();
 
     // Validation
     if (!name || !email || !password) {
@@ -64,6 +65,65 @@ export async function POST(request: NextRequest) {
 
     await newUser.save();
 
+    // Link anonymous usage to the new user account if device info provided
+    if (deviceId || sessionId) {
+      try {
+        // Find anonymous sessions associated with this device
+        const anonymousSessionsToLink = await AnonymousSession.find({
+          $or: [
+            { sessionId: deviceId }, // Device-based session
+            { sessionId: sessionId }, // Specific session
+            { "deviceInfo.permanentId": deviceId }, // Device info match
+          ],
+        });
+
+        if (anonymousSessionsToLink.length > 0) {
+          // Update anonymous sessions to link them to the new user
+          await AnonymousSession.updateMany(
+            {
+              $or: [
+                { sessionId: deviceId },
+                { sessionId: sessionId },
+                { "deviceInfo.permanentId": deviceId },
+              ],
+            },
+            {
+              $set: {
+                syncedToUser: newUser._id.toString(),
+                "deviceInfo.linkedEmail": email.toLowerCase(),
+              },
+            }
+          );
+
+          // Calculate total anonymous usage to add to user's usage
+          const totalAnonymousMinutes = anonymousSessionsToLink.reduce(
+            (sum, session) => sum + (session.totalMinutesUsed || 0),
+            0
+          );
+
+          // Update user's usage with anonymous usage
+          if (totalAnonymousMinutes > 0) {
+            await User.findByIdAndUpdate(newUser._id, {
+              $inc: {
+                "usage.totalMinutesUsed": totalAnonymousMinutes,
+              },
+            });
+          }
+
+          console.log(
+            `✅ Linked ${
+              anonymousSessionsToLink.length
+            } anonymous sessions (${totalAnonymousMinutes.toFixed(
+              1
+            )} minutes) to new user: ${email}`
+          );
+        }
+      } catch (linkError) {
+        console.error("Error linking anonymous usage:", linkError);
+        // Don't fail the signup if linking fails
+      }
+    }
+
     // Return success (don't include sensitive data)
     return NextResponse.json(
       {
@@ -73,6 +133,7 @@ export async function POST(request: NextRequest) {
           name: newUser.name,
           email: newUser.email,
         },
+        linkedAnonymousUsage: !!(deviceId || sessionId),
       },
       { status: 201 }
     );

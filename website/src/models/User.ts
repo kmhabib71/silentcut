@@ -12,6 +12,7 @@ export interface IUser extends Document {
     startDate: Date;
     endDate?: Date;
     paymentId?: string;
+    price?: number; // Store the actual price paid
   };
   usage: {
     totalMinutesUsed: number;
@@ -26,6 +27,13 @@ export interface IUser extends Document {
     lastName?: string;
     company?: string;
     timezone?: string;
+  };
+  blocking: {
+    isBlocked: boolean;
+    blockedAt?: Date;
+    blockedBy?: string; // Admin who blocked
+    reason?: string;
+    blockedUntil?: Date; // Optional expiry date for temporary blocks
   };
   banned: boolean;
   isAdmin: boolean;
@@ -83,6 +91,9 @@ const UserSchema: Schema = new Schema(
       paymentId: {
         type: String,
       },
+      price: {
+        type: Number,
+      },
     },
     usage: {
       totalMinutesUsed: {
@@ -105,6 +116,16 @@ const UserSchema: Schema = new Schema(
       lastName: String,
       company: String,
       timezone: String,
+    },
+    blocking: {
+      isBlocked: {
+        type: Boolean,
+        default: false,
+      },
+      blockedAt: Date,
+      blockedBy: String,
+      reason: String,
+      blockedUntil: Date,
     },
     banned: {
       type: Boolean,
@@ -134,6 +155,16 @@ UserSchema.index({ isAdmin: 1 });
 
 // Method to check if user can process file of given duration
 UserSchema.methods.canProcessFile = function (durationMinutes: number) {
+  // Check if user is blocked
+  if (this.blocking?.isBlocked || this.banned) {
+    return false;
+  }
+
+  // Check if temporary block has expired
+  if (this.blocking?.blockedUntil && new Date() < this.blocking.blockedUntil) {
+    return false;
+  }
+
   const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
   const currentUsage = this.usage.monthlyUsage.find(
     (usage: { month: string; minutes: number }) => usage.month === currentMonth
@@ -142,9 +173,14 @@ UserSchema.methods.canProcessFile = function (durationMinutes: number) {
 
   if (this.subscription.plan === "free") {
     return usedMinutes + durationMinutes <= 60; // 60 minutes limit for free plan
+  } else if (
+    this.subscription.plan === "monthly" ||
+    this.subscription.plan === "yearly"
+  ) {
+    return true; // Unlimited for paid plans
   }
 
-  return true; // Unlimited for paid plans
+  return true; // Fallback
 };
 
 // Method to add usage

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Mail, Lock, Eye, EyeOff, User, CheckCircle, Zap } from "lucide-react";
 
@@ -20,6 +20,11 @@ export default function SignUpPage() {
   const [error, setError] = useState("");
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Get device and session parameters from URL
+  const deviceId = searchParams.get("device");
+  const sessionId = searchParams.get("session");
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -47,7 +52,7 @@ export default function SignUpPage() {
     }
 
     try {
-      // Create account via API
+      // Create account via API with device information
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: {
@@ -57,6 +62,8 @@ export default function SignUpPage() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
+          deviceId,
+          sessionId,
         }),
       });
 
@@ -67,10 +74,12 @@ export default function SignUpPage() {
         return;
       }
 
-      // Auto sign in after successful signup
+      // Auto sign in after successful signup with device info
       const result = await signIn("credentials", {
         email: formData.email,
         password: formData.password,
+        deviceId,
+        sessionId,
         redirect: false,
       });
 
@@ -93,8 +102,12 @@ export default function SignUpPage() {
     setError("");
 
     try {
+      // Include device parameters in Google signup
+      const callbackUrl = `/dashboard${
+        deviceId && sessionId ? `?device=${deviceId}&session=${sessionId}` : ""
+      }`;
       await signIn("google", {
-        callbackUrl: "/dashboard",
+        callbackUrl,
         redirect: true,
       });
     } catch (error) {
@@ -126,6 +139,18 @@ export default function SignUpPage() {
           <p className="text-gray-300">
             Join thousands of content creators using SilenceCutter
           </p>
+
+          {/* Show device info if coming from app */}
+          {deviceId && (
+            <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <p className="text-green-400 text-sm">
+                🔗 Your anonymous usage will be linked to your new account
+              </p>
+              <p className="text-gray-400 text-xs">
+                Device: {deviceId.slice(0, 8)}...
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Sign Up Form */}
@@ -342,7 +367,11 @@ export default function SignUpPage() {
             <p className="text-gray-300">
               Already have an account?{" "}
               <Link
-                href="/auth/signin"
+                href={`/auth/signin${
+                  deviceId && sessionId
+                    ? `?device=${deviceId}&session=${sessionId}`
+                    : ""
+                }`}
                 className="text-purple-400 hover:text-purple-300 font-medium"
               >
                 Sign in

@@ -27833,6 +27833,111 @@ class SilenceCutterApp(QMainWindow):
             pass
             return
 
+        # Check usage limits before processing
+        if API_COMMUNICATION_AVAILABLE:
+            try:
+                # Calculate file duration properly
+                duration_minutes = 1  # Default fallback
+                
+                # Try to get actual duration from video player
+                if hasattr(self, 'video_player') and hasattr(self.video_player, 'duration_seconds'):
+                    duration_minutes = self.video_player.duration_seconds / 60
+                    print(f"🎥 Using video player duration: {duration_minutes:.2f} minutes")
+                else:
+                    # Try to get duration from file metadata using multiple methods
+                    try:
+                        # Method 1: Try FFprobe if available
+                        import subprocess
+                        result = subprocess.run([
+                            'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+                            '-of', 'csv=p=0', self.video_path
+                        ], capture_output=True, text=True, timeout=10)
+                        
+                        if result.returncode == 0 and result.stdout.strip():
+                            duration_seconds = float(result.stdout.strip())
+                            duration_minutes = duration_seconds / 60
+                            print(f"🔍 Using FFprobe duration: {duration_minutes:.2f} minutes")
+                        else:
+                            raise Exception("FFprobe failed")
+                            
+                    except Exception as e:
+                        try:
+                            # Method 2: Try MoviePy if available
+                            from moviepy.editor import VideoFileClip, AudioFileClip
+                            
+                            if getattr(self, 'is_audio_only', False):
+                                with AudioFileClip(self.video_path) as clip:
+                                    duration_minutes = clip.duration / 60
+                            else:
+                                with VideoFileClip(self.video_path) as clip:
+                                    duration_minutes = clip.duration / 60
+                            print(f"🎬 Using MoviePy duration: {duration_minutes:.2f} minutes")
+                            
+                        except Exception as e2:
+                            # Method 3: Conservative estimate (last resort)
+                            try:
+                                file_size_bytes = os.path.getsize(self.video_path)
+                                file_size_mb = file_size_bytes / (1024 * 1024)
+                                
+                                # More reasonable estimation: assume ~25MB per minute for video
+                                # Use conservative estimate to avoid overcharging
+                                duration_minutes = max(0.1, min(file_size_mb / 25, 10))  # Cap at 10 minutes for safety
+                                print(f"⚠️ Using conservative file size estimation: {duration_minutes:.2f} minutes")
+                            except Exception as e3:
+                                print(f"⚠️ All duration calculation methods failed: {e3}")
+                                duration_minutes = 1  # Safe fallback
+                
+                # Validate usage before processing
+                validation_result = api_client.validate_file_usage(
+                    file_duration_minutes=duration_minutes
+                )
+                
+                if not validation_result.get('allowed', False):
+                    message = validation_result.get('message', 'Usage limit exceeded')
+                    remaining = validation_result.get('remainingMinutes', 0)
+                    
+                    # Create upgrade message with specific details
+                    upgrade_message = f"{message}\n\n"
+                    if remaining > 0:
+                        upgrade_message += f"You have {remaining:.1f} minutes remaining this month.\n"
+                    else:
+                        upgrade_message += "You have reached your monthly limit.\n"
+                    
+                    upgrade_message += "Upgrade to a paid plan for unlimited processing!"
+                    
+                    # Show usage limit dialog
+                    msg_box = QMessageBox()
+                    msg_box.setIcon(QMessageBox.Warning)
+                    msg_box.setWindowTitle("Usage Limit Exceeded")
+                    msg_box.setText(upgrade_message)
+                    
+                    # Add upgrade button
+                    upgrade_btn = msg_box.addButton("🚀 Upgrade Now", QMessageBox.ActionRole)
+                    cancel_btn = msg_box.addButton("Cancel", QMessageBox.RejectRole)
+                    msg_box.setDefaultButton(upgrade_btn)
+                    
+                    result = msg_box.exec_()
+                    
+                    # Open upgrade page if user clicks upgrade
+                    if msg_box.clickedButton() == upgrade_btn:
+                        self.open_help_upgrade()
+                    
+                    return  # Stop processing
+                    
+                print(f"✅ Usage validation passed: {validation_result.get('message', 'OK')}")
+                
+            except Exception as e:
+                print(f"⚠️ Usage validation failed: {e}")
+                # Show warning but allow processing in offline mode
+                msg_box = QMessageBox()
+                msg_box.setIcon(QMessageBox.Warning) 
+                msg_box.setWindowTitle("Offline Mode")
+                msg_box.setText("Unable to verify usage limits (offline mode).\n\nProcessing will continue but may not count towards your quota until you're back online.")
+                msg_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+                
+                if msg_box.exec_() == QMessageBox.Cancel:
+                    return
+
         # Get selected silent parts
         selected_parts = [part for part in self.silent_parts if part.get('selected', False)]
 
@@ -27922,10 +28027,47 @@ class SilenceCutterApp(QMainWindow):
                 # Calculate actual processing time/duration
                 if hasattr(self, 'video_player') and hasattr(self.video_player, 'duration_seconds'):
                     duration_minutes = self.video_player.duration_seconds / 60
+                    print(f"🎥 Recording usage with video player duration: {duration_minutes:.2f} minutes")
                 else:
-                    # Fallback estimation
-                    file_size_bytes = os.path.getsize(self.video_path)
-                    duration_minutes = max(1, file_size_bytes / (1024 * 1024))
+                    # Use the same improved duration calculation as validation
+                    try:
+                        # Method 1: Try FFprobe if available
+                        import subprocess
+                        result = subprocess.run([
+                            'ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+                            '-of', 'csv=p=0', self.video_path
+                        ], capture_output=True, text=True, timeout=10)
+                        
+                        if result.returncode == 0 and result.stdout.strip():
+                            duration_seconds = float(result.stdout.strip())
+                            duration_minutes = duration_seconds / 60
+                            print(f"🔍 Recording usage with FFprobe duration: {duration_minutes:.2f} minutes")
+                        else:
+                            raise Exception("FFprobe failed")
+                            
+                    except Exception:
+                        try:
+                            # Method 2: Try MoviePy if available
+                            from moviepy.editor import VideoFileClip, AudioFileClip
+                            
+                            if getattr(self, 'is_audio_only', False):
+                                with AudioFileClip(self.video_path) as clip:
+                                    duration_minutes = clip.duration / 60
+                            else:
+                                with VideoFileClip(self.video_path) as clip:
+                                    duration_minutes = clip.duration / 60
+                            print(f"🎬 Recording usage with MoviePy duration: {duration_minutes:.2f} minutes")
+                            
+                        except Exception:
+                            # Method 3: Conservative estimate (last resort)
+                            try:
+                                file_size_bytes = os.path.getsize(self.video_path)
+                                file_size_mb = file_size_bytes / (1024 * 1024)
+                                duration_minutes = max(0.1, min(file_size_mb / 25, 10))  # Cap at 10 minutes for safety
+                                print(f"⚠️ Recording usage with conservative file size estimation: {duration_minutes:.2f} minutes")
+                            except Exception:
+                                duration_minutes = 1  # Safe fallback
+                                print(f"⚠️ Recording usage with fallback duration: {duration_minutes:.2f} minutes")
                 
                 api_client.record_usage(
                     file_path=self.video_path,
