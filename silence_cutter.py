@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QHBoxLayout, QV
                              QListWidgetItem, QMessageBox, QCheckBox,
                              QSplitter, QScrollArea, QFrame, QSizePolicy)
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, QSize, QRectF, QUrl, QPropertyAnimation, QEasingCurve, QPointF, QMutex
-from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QBrush, QPainterPath, QImage, QPixmap, QLinearGradient
+from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QBrush, QPainterPath, QImage, QPixmap, QLinearGradient, QIcon
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtMultimediaWidgets import QVideoWidget
 import cv2
@@ -23,6 +23,27 @@ import pygame
 import threading
 from collections import deque
 import queue
+
+# Add webbrowser for opening URLs
+import webbrowser
+
+# Import API communication for SaaS integration
+try:
+    from features.api_communication import api_client
+    API_COMMUNICATION_AVAILABLE = True
+    print("✅ API communication module loaded successfully")
+except ImportError as e:
+    print(f"⚠️  API communication not available: {e}")
+    API_COMMUNICATION_AVAILABLE = False
+    # Create dummy api_client for fallback
+    class DummyAPIClient:
+        def validate_file_usage(self, *args, **kwargs):
+            return {'allowed': True, 'message': 'Offline mode'}
+        def record_usage(self, *args, **kwargs):
+            return True
+        def open_upgrade_page(self):
+            return "https://silencecutter.com/pricing"
+    api_client = DummyAPIClient()
 
 # Import manual cutting feature
 try:
@@ -806,6 +827,27 @@ import pygame
 import threading
 from collections import deque
 import queue
+
+# Add webbrowser for opening URLs
+import webbrowser
+
+# Import API communication for SaaS integration
+try:
+    from features.api_communication import api_client
+    API_COMMUNICATION_AVAILABLE = True
+    print("✅ API communication module loaded successfully")
+except ImportError as e:
+    print(f"⚠️  API communication not available: {e}")
+    API_COMMUNICATION_AVAILABLE = False
+    # Create dummy api_client for fallback
+    class DummyAPIClient:
+        def validate_file_usage(self, *args, **kwargs):
+            return {'allowed': True, 'message': 'Offline mode'}
+        def record_usage(self, *args, **kwargs):
+            return True
+        def open_upgrade_page(self):
+            return "https://silencecutter.com/pricing"
+    api_client = DummyAPIClient()
 
 # Import manual cutting feature
 try:
@@ -26707,7 +26749,8 @@ class SilenceCutterApp(QMainWindow):
                 TRANSCRIPT_INTEGRATION_AVAILABLE = False
 
     def setup_ui(self):
-        self.setWindowTitle("🎬 Media Silence Cutter")
+        self.setWindowTitle("Media Silence Cutter")
+        self.setWindowIcon(QIcon("zaplogo.png"))
         self.setMinimumWidth(1200)
         self.setMinimumHeight(800)
 
@@ -26811,19 +26854,28 @@ class SilenceCutterApp(QMainWindow):
         title_layout.setSpacing(12)
 
         # Icon placeholder (you can replace with actual icon)
-        icon_label = QLabel("🎬")
+        icon_label = QLabel()
+        # Load the zap logo PNG image
+        try:
+            pixmap = QPixmap("zaplogo.png")
+            if not pixmap.isNull():
+                scaled_pixmap = pixmap.scaled(45, 45, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                icon_label.setPixmap(scaled_pixmap)
+                icon_label.setAlignment(Qt.AlignCenter)
+            else:
+                icon_label.setText("⚡")
+        except Exception as e:
+            print(f"Error loading zaplogo.png: {e}")
+            icon_label.setText("⚡")
         icon_label.setStyleSheet("""
             QLabel {
-                background-color: #2563eb;
-                color: white;
-                border-radius: 8px;
-                padding: 8px;
-                font-size: 20px;
-                min-width: 40px;
-                max-width: 40px;
-                min-height: 40px;
-                max-height: 40px;
-                text-align: center;
+               
+                
+                
+                min-width: 45px;
+                max-width: 45px;
+                min-height: 45px;
+                max-height: 45px;
             }
         """)
 
@@ -26842,18 +26894,19 @@ class SilenceCutterApp(QMainWindow):
         title_layout.addStretch()
 
         # Header buttons - all with consistent height
-        shortcuts_btn = QPushButton("⌨️ Shortcuts")
-        shortcuts_btn.setObjectName("secondaryButton")
-        shortcuts_btn.setMaximumWidth(120)
-        shortcuts_btn.setMinimumHeight(40)
-        shortcuts_btn.setMaximumHeight(40)
-        shortcuts_btn.clicked.connect(self.show_shortcuts_modal)
+        tutorial_btn = QPushButton("📚 Tutorial")
+        tutorial_btn.setObjectName("secondaryButton")
+        tutorial_btn.setMaximumWidth(120)
+        tutorial_btn.setMinimumHeight(40)
+        tutorial_btn.setMaximumHeight(40)
+        tutorial_btn.clicked.connect(self.open_tutorial)
 
-        help_btn = QPushButton("❓ Help")
-        help_btn.setObjectName("secondaryButton")
-        help_btn.setMaximumWidth(100)
-        help_btn.setMinimumHeight(40)
-        help_btn.setMaximumHeight(40)
+        help_upgrade_btn = QPushButton("🚀 Help & Upgrade")
+        help_upgrade_btn.setObjectName("secondaryButton")
+        help_upgrade_btn.setMaximumWidth(150)
+        help_upgrade_btn.setMinimumHeight(40)
+        help_upgrade_btn.setMaximumHeight(40)
+        help_upgrade_btn.clicked.connect(self.open_help_upgrade)
 
         # Batch Processing button
         batch_btn = QPushButton("📦 Batch Processing")
@@ -26915,8 +26968,8 @@ class SilenceCutterApp(QMainWindow):
         """)
 
         header_layout.addLayout(title_layout)
-        header_layout.addWidget(shortcuts_btn)
-        header_layout.addWidget(help_btn)
+        header_layout.addWidget(tutorial_btn)
+        header_layout.addWidget(help_upgrade_btn)
         header_layout.addWidget(batch_btn)
         header_layout.addWidget(self.export_btn)
 
@@ -27384,6 +27437,35 @@ class SilenceCutterApp(QMainWindow):
         )
 
         if file_path:
+            # Validate file usage with API
+            if API_COMMUNICATION_AVAILABLE:
+                try:
+                    # Get file size in minutes (estimate)
+                    file_size_bytes = os.path.getsize(file_path)
+                    # Rough estimate: 1MB = ~1 minute for compressed video
+                    estimated_minutes = max(1, file_size_bytes / (1024 * 1024))
+                    
+                    validation_result = api_client.validate_file_usage(
+                        file_path=file_path,
+                        estimated_duration_minutes=estimated_minutes
+                    )
+                    
+                    if not validation_result.get('allowed', False):
+                        message = validation_result.get('message', 'Usage limit exceeded')
+                        QMessageBox.warning(
+                            self,
+                            "Usage Limit Exceeded",
+                            f"{message}\n\nPlease upgrade your plan to continue processing files."
+                        )
+                        # Open upgrade page
+                        self.open_help_upgrade()
+                        return
+                        
+                    print(f"✅ File usage validated: {validation_result.get('message', 'OK')}")
+                except Exception as e:
+                    print(f"⚠️ API validation failed: {e}")
+                    # Continue in offline mode
+            
             # Check if this is an audio file
             is_audio = self.is_audio_file(file_path)
 
@@ -27832,6 +27914,27 @@ class SilenceCutterApp(QMainWindow):
         self.processing_thread.progress_updated.connect(self.update_processing_progress)
         self.processing_thread.processing_complete.connect(self.show_processing_results)
         self.processing_thread.start()
+
+    
+        # Record usage after successful processing
+        if API_COMMUNICATION_AVAILABLE and hasattr(self, 'video_path') and self.video_path:
+            try:
+                # Calculate actual processing time/duration
+                if hasattr(self, 'video_player') and hasattr(self.video_player, 'duration_seconds'):
+                    duration_minutes = self.video_player.duration_seconds / 60
+                else:
+                    # Fallback estimation
+                    file_size_bytes = os.path.getsize(self.video_path)
+                    duration_minutes = max(1, file_size_bytes / (1024 * 1024))
+                
+                api_client.record_usage(
+                    file_path=self.video_path,
+                    duration_minutes=duration_minutes,
+                    processing_type='silence_removal'
+                )
+                print(f"✅ Usage recorded: {duration_minutes:.1f} minutes")
+            except Exception as e:
+                print(f"⚠️ Failed to record usage: {e}")
 
     def update_processing_progress(self, progress):
         # Update modal progress
@@ -28537,6 +28640,39 @@ class SilenceCutterApp(QMainWindow):
                 "Batch Processing Error",
                 f"Failed to open batch processing dialog:\n{str(e)}"
             )
+    def open_tutorial(self):
+        """Open tutorial video in browser"""
+        tutorial_url = "https://youtu.be/YOUR_TUTORIAL_VIDEO_ID"  # Replace with actual tutorial URL
+        try:
+            webbrowser.open(tutorial_url)
+            print(f"✅ Opening tutorial: {tutorial_url}")
+        except Exception as e:
+            print(f"❌ Failed to open tutorial: {e}")
+            QMessageBox.information(
+                self,
+                "Tutorial",
+                f"Please visit our tutorial at:\n{tutorial_url}"
+            )
+
+    def open_help_upgrade(self):
+        """Open help and upgrade page"""
+        try:
+            if API_COMMUNICATION_AVAILABLE:
+                upgrade_url = api_client.open_upgrade_page()
+            else:
+                upgrade_url = "https://silencecutter.com/pricing"
+            
+            webbrowser.open(upgrade_url)
+            print(f"✅ Opening help & upgrade: {upgrade_url}")
+        except Exception as e:
+            print(f"❌ Failed to open help & upgrade: {e}")
+            QMessageBox.information(
+                self,
+                "Help & Upgrade",
+                f"Please visit our help page at:\n{upgrade_url if 'upgrade_url' in locals() else 'https://silencecutter.com/pricing'}"
+            )
+
+
 
     def show_shortcuts_modal(self):
         """Show keyboard shortcuts in a modal dialog"""
